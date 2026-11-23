@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>meu canto</title>
+<style>
+/* =========================================================
+   MEU CANTO — feed vertical com zoom
+   Tudo que é visual vem das variáveis abaixo. O painel
+   "aparência" (tecla A) muda essas variáveis ao vivo.
+   ========================================================= */
+:root{
+  --bg:#0f1115; --pat:#262b36; --card:#171a21; --border:#2c3240; --bw:1px; --radius:14px;
+  --shadow:0 6px 24px rgba(0,0,0,.3); --text:#e6e8ee; --muted:#8a91a3; --accent:#7c9cff; --link:#7c9cff;
+  --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --bar:#14171d;
+  --footer:#8a91a3; --fs:16px; --col:620px; --gap:14px; --photo:#ffffff; --frame:6px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ---------- barra do topo ---------- */
+#bar{position:fixed;top:0;left:0;right:0;height:48px;display:flex;align-items:center;gap:2px;padding:0 10px;background:var(--bar);border-bottom:var(--bw) solid var(--border);z-index:20;font-size:13px}
+#bar .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);margin:0 8px 0 4px;cursor:pointer;flex:none}
+#bar .title{font-weight:650;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+#bar .sp{flex:1}
+#bar .sep{width:1px;height:20px;background:var(--border);margin:0 6px}
+.btn{padding:6px 9px;border-radius:9px;color:var(--muted);white-space:nowrap}
+.btn:hover{background:rgba(127,127,127,.15);color:var(--text)}
+.btn.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,transparent)}
+.btn kbd{font-size:10px;opacity:.55;margin-left:3px;font-family:inherit}
+#zoomLbl{min-width:52px;text-align:center}
+#chip{display:none;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);cursor:pointer;margin-right:6px}
+@media (max-width:900px){.btn kbd,.hide-sm{display:none}}
+
+/* ---------- área do feed (com zoom) ---------- */
+#vp{position:fixed;inset:48px 0 0 0;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#vp.anim{transition:background-position .45s cubic-bezier(.2,.8,.2,1),background-size .45s cubic-bezier(.2,.8,.2,1)}
+#vp.pan,#vp.pan *{cursor:grab!important}
+#vp.panning,#vp.panning *{cursor:grabbing!important}
+#vp.linking .item{cursor:crosshair}
+#world{position:absolute;left:0;top:0;width:var(--col);transform-origin:0 0;padding-bottom:160px}
+#world.anim{transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+#links{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+#links path{fill:none;stroke:var(--link);stroke-width:1.6;opacity:.6}
+#links path.q{stroke-dasharray:6 5}
+#links circle{fill:var(--link);opacity:.8}
+
+/* ---------- perfil (topo do feed) ---------- */
+#prof{padding:8px 4px 22px}
+#pTitle{font-size:calc(var(--fs) * 2.4);font-weight:700;line-height:1.1;margin:0 0 6px;outline:none;border-radius:8px}
+#pBio{margin:0;color:var(--muted);font-size:calc(var(--fs) * 1);line-height:1.5;outline:none;border-radius:6px;min-height:1.5em}
+#pTitle:focus,#pBio:focus{background:rgba(127,127,127,.12)}
+#pStats{margin-top:10px;font-size:calc(var(--fs) * .8);color:var(--muted)}
+#prof [contenteditable]{user-select:text;-webkit-user-select:text}
+
+/* ---------- caixa de postar ---------- */
+.note{background:var(--card);border:var(--bw) solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 14px}
+#comp{margin-bottom:26px;padding:14px 16px 10px;position:relative;z-index:9}
+#compTxt{display:block;width:100%;min-height:3.2em;background:transparent;border:0;outline:none;color:var(--text);font:inherit;font-size:var(--fs);line-height:1.5;resize:none;user-select:text;-webkit-user-select:text}
+#comp.textmode #compTxt{font-size:calc(var(--fs) * 1.4)}
+#compTxt::placeholder{color:var(--muted)}
+#compImg{display:none;position:relative;margin:8px 0}
+#compImg img{max-height:220px;max-width:100%;border-radius:calc(var(--radius) * .6);display:block}
+.x{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.6);color:#fff;border-radius:99px;width:24px;height:24px;font-size:12px}
+#compQuote{position:relative}
+#compQuote .x{left:auto;right:6px}
+.crow{display:flex;align-items:center;gap:2px;margin-top:8px;padding-top:8px;border-top:var(--bw) solid var(--border);font-size:calc(var(--fs) * .8);color:var(--muted)}
+.crow .sp{flex:1}
+.crow .btn{font-size:inherit}
+.crow .hint{opacity:.7;margin-right:8px}
+.post{background:var(--accent);color:var(--bg);font-weight:650;padding:6px 16px;border-radius:99px}
+
+/* ---------- posts ---------- */
+#feed{display:flex;flex-wrap:wrap;gap:var(--gap);align-items:flex-start}
+/* tamanhos: PP e P dividem a linha, M/G/GG ocupam a coluna toda */
+.item{flex:0 0 auto;width:100%}
+.item.sz-pp{width:calc((100% - 2 * var(--gap)) / 3)}
+.item.sz-p{width:calc((100% - var(--gap)) / 2)}
+.day{flex:0 0 100%;font-size:calc(var(--fs) * .75);color:var(--muted);text-transform:lowercase;margin:14px 4px 0;display:flex;align-items:center;gap:10px}
+.day::after{content:"";flex:1;height:1px;background:var(--border)}
+.item{position:relative;font-size:calc(var(--fs) * var(--k,1));line-height:1.5;cursor:grab}
+.item.sel{z-index:3}
+.item.dragging{z-index:10;cursor:grabbing;opacity:.92}
+.item.dragging.note{box-shadow:0 18px 40px rgba(0,0,0,.35)}
+#vp.moving,#vp.moving *{cursor:grabbing!important}
+#vp.sizing,#vp.sizing *{cursor:nwse-resize!important}
+.rz{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;opacity:0;transition:opacity .15s}
+.item:hover .rz,.item.sel .rz{opacity:.75}
+.rz::after{content:"";position:absolute;right:5px;bottom:5px;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted)}
+.note.sel{outline:2px solid var(--accent);outline-offset:3px}
+.text{padding:6px 6px 2px;border-radius:8px;outline:1px dashed transparent}
+.text:hover,.text.sel{outline-color:var(--border)}
+.item.flash{animation:flash 1.3s}
+@keyframes flash{30%{box-shadow:0 0 0 8px color-mix(in srgb,var(--accent) 45%,transparent)}}
+.head,.foot{font-size:calc(var(--fs) * .75)}
+.head{display:flex;gap:8px;align-items:center;color:var(--muted);margin-bottom:6px}
+.head .id{color:var(--accent);font-weight:600}
+.text .head{opacity:.0;transition:opacity .15s;margin-bottom:2px}
+.text:hover .head,.text.sel .head{opacity:1}
+.body{overflow-wrap:anywhere}
+.body a{color:var(--link)}
+.ref{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600}
+.ref:hover{text-decoration:underline}
+.tag{color:var(--accent);cursor:pointer}
+.body code{background:rgba(127,127,127,.18);padding:1px 5px;border-radius:5px;font-size:.9em}
+.body .empty{color:var(--muted);font-style:italic}
+.img{display:block;max-width:100%;border-radius:calc(var(--radius) * .6);margin-top:10px;pointer-events:none;-webkit-user-drag:none}
+.quote{margin-top:10px;border:var(--bw) solid var(--border);border-radius:calc(var(--radius) * .6);padding:8px 12px;font-size:.88em;cursor:pointer;background:rgba(127,127,127,.06)}
+.quote:hover{border-color:var(--accent)}
+.quote .qh{color:var(--muted);font-size:.85em;margin-bottom:2px}
+.quote img{max-height:110px;max-width:100%;border-radius:6px;margin-top:6px;display:block}
+/* menu de ações: flutua embaixo do balão, só aparece no hover, não ocupa espaço */
+.foot{position:absolute;left:0;top:100%;margin-top:6px;display:flex;gap:1px;color:var(--muted);background:var(--bar);border:var(--bw) solid var(--border);border-radius:10px;padding:2px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .15s;z-index:8}
+.foot::before{content:"";position:absolute;left:0;right:0;top:-10px;height:10px}
+.item:hover .foot,.item.sel .foot{opacity:1;pointer-events:auto}
+.item:hover{z-index:7}
+.foot button{padding:3px 7px;border-radius:6px;color:var(--muted)}
+.foot button:hover{background:rgba(127,127,127,.15);color:var(--text)}
+.foot .bl{color:var(--accent)}
+textarea.ed{display:block;width:100%;min-height:1.5em;background:transparent;border:0;outline:none;color:inherit;font:inherit;line-height:1.5;resize:none;padding:0;user-select:text;-webkit-user-select:text}
+textarea.ed::placeholder{color:var(--muted)}
+.endmark{text-align:center;color:var(--muted);font-size:calc(var(--fs) * .8);padding:30px 0 0}
+
+/* imagem sem texto = foto jogada, sem caixinha */
+.loose{background:none;border:0;box-shadow:none;padding:0}
+.loose .img{margin:0;border-radius:3px;border:var(--frame) solid var(--photo);box-shadow:0 14px 34px rgba(0,0,0,.35);transform:rotate(var(--rot,0deg));transition:transform .2s}
+.loose:hover .img,.loose.sel .img{transform:rotate(0deg) scale(1.01)}
+.loose .head{position:absolute;bottom:100%;left:0;margin:0 0 4px;opacity:0;transition:opacity .15s;white-space:nowrap}
+.loose:hover .head,.loose.sel .head{opacity:1}
+.loose .body{display:none}
+.note.loose.sel{outline-offset:6px}
+
+/* ---------- painel de aparência ---------- */
+#look{position:fixed;top:48px;bottom:0;left:0;width:320px;max-width:100vw;background:var(--bar);border-right:var(--bw) solid var(--border);z-index:15;display:none;overflow:auto;padding:14px 16px 60px;font-size:13px}
+#look.open{display:block}
+#look h3{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px;font-weight:600}
+#look h3:first-child{margin-top:0}
+.fr{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:7px 0}
+.fr input[type=color]{width:34px;height:24px;border:var(--bw) solid var(--border);border-radius:6px;background:none;padding:0;cursor:pointer}
+.fr input[type=range]{width:120px;accent-color:var(--accent)}
+.fr select,.fr input[type=text]{background:var(--card);color:var(--text);border:var(--bw) solid var(--border);border-radius:6px;padding:4px 6px;font:inherit;max-width:150px}
+#look textarea{width:100%;min-height:120px;background:var(--card);color:var(--text);border:var(--bw) solid var(--border);border-radius:8px;padding:8px;font:12px ui-monospace,Menlo,Consolas,monospace}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.presets button,.lbtn{border:var(--bw) solid var(--border);border-radius:8px;padding:7px 8px;text-align:left;color:var(--text)}
+.presets button:hover,.lbtn:hover{border-color:var(--accent)}
+.lbtn{display:block;width:100%;margin:6px 0}
+
+/* ---------- rodapé, toast, ajuda ---------- */
+#pfoot{position:fixed;left:14px;bottom:10px;z-index:12;color:var(--footer);font-size:12px;user-select:none;pointer-events:none}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--card);color:var(--text);border:var(--bw) solid var(--border);padding:9px 16px;border-radius:99px;font-size:13px;opacity:0;transition:.2s;z-index:50;pointer-events:none;box-shadow:var(--shadow);display:flex;gap:12px;align-items:center}
+#toast.show{opacity:1;transform:translateX(-50%);pointer-events:auto}
+#toast button{color:var(--accent);font-weight:650}
+#help{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:40}
+#help.open{display:flex}
+#help .box{background:var(--card);border:var(--bw) solid var(--border);border-radius:var(--radius);padding:22px 26px;max-width:480px;width:90%;font-size:14px;line-height:1.9;box-shadow:var(--shadow)}
+#help kbd{background:rgba(127,127,127,.2);border-radius:5px;padding:1px 6px;font-family:inherit;font-size:12px}
+
+/* ---------- segredos ---------- */
+body.party .note{animation:hue 2.5s linear infinite}
+@keyframes hue{to{filter:hue-rotate(360deg)}}
+.confetti{position:fixed;top:-40px;font-size:26px;z-index:100;pointer-events:none;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(115vh) rotate(720deg)}}
+</style>
+<style id="customCss"></style>
+</head>
+<body>
+
+<header id="bar">
+  <span class="dot" id="dot"></span>
+  <span class="title" id="barTitle">meu canto</span>
+  <span class="sep"></span>
+  <button class="btn" id="bNote">+ post<kbd>N</kbd></button>
+  <button class="btn" id="bText">+ texto<kbd>T</kbd></button>
+  <span class="sp"></span>
+  <span id="chip" title="tirar filtro"></span>
+  <button class="btn hide-sm" id="bOrder" title="ordem do feed">mais novos ↓</button>
+  <span class="sep hide-sm"></span>
+  <button class="btn hide-sm" id="fsDown" title="diminuir fonte">A−</button>
+  <button class="btn hide-sm" id="fsUp" title="aumentar fonte">A+</button>
+  <span class="sep hide-sm"></span>
+  <button class="btn" id="zOut" title="zoom out">−</button>
+  <button class="btn" id="zoomLbl" title="voltar pra 100%">100%</button>
+  <button class="btn" id="zIn" title="zoom in">+</button>
+  <button class="btn" id="bTop" title="voltar pro topo">⤒</button>
+  <span class="sep"></span>
+  <button class="btn" id="bLook">aparência<kbd>A</kbd></button>
+  <button class="btn" id="bHelp">?</button>
+</header>
+
+<main id="vp">
+  <div id="world">
+    <svg id="links"></svg>
+    <section id="prof">
+      <h1 id="pTitle" contenteditable="true" spellcheck="false">meu canto</h1>
+      <p id="pBio" contenteditable="true" spellcheck="false"></p>
+      <div id="pStats"></div>
+    </section>
+    <section id="comp" class="note">
+      <textarea id="compTxt" rows="2"></textarea>
+      <div id="compQuote"></div>
+      <div id="compImg"><img alt=""><button class="x" id="compImgX" title="tirar imagem">✕</button></div>
+      <div class="crow">
+        <button class="btn" id="cMode" title="alternar entre post com caixinha e texto solto">post</button>
+        <button class="btn" id="cPic">imagem</button>
+        <span class="sp"></span>
+        <span class="hint">ctrl+enter</span>
+        <button class="post" id="cPost">postar</button>
+      </div>
+    </section>
+    <div id="feed"></div>
+    <div class="endmark" id="endmark"></div>
+  </div>
+</main>
+
+<aside id="look"></aside>
+<div id="pfoot"></div>
+<div id="toast"></div>
+<div id="help"><div class="box">
+  <b>atalhos</b><br>
+  <kbd>N</kbd> escrever post · <kbd>T</kbd> texto solto (sem caixinha)<br>
+  scroll ou <kbd>espaço</kbd> + arrastar → sobe e desce<br>
+  <kbd>ctrl</kbd> + scroll → zoom · <kbd>ctrl</kbd> <kbd>+</kbd>/<kbd>−</kbd>/<kbd>0</kbd> também<br>
+  <kbd>J</kbd>/<kbd>K</kbd> próximo/anterior · <kbd>Home</kbd> topo · <kbd>End</kbd> fim<br>
+  imagem sem texto vira foto jogada · com texto fica na caixinha<br>
+  arrastar um balão → move ele pra onde quiser<br>
+  cantinho ↘ → arraste pra aumentar/diminuir (pequenos dividem a linha)<br>
+  <kbd>alt</kbd> + scroll em cima de um balão → aumenta/diminui só ele<br>
+  <kbd>A</kbd> aparência · <kbd>Enter</kbd> edita o selecionado · <kbd>Del</kbd> apaga<br>
+  duplo clique num post → edita · <kbd>Esc</kbd> ou <kbd>ctrl</kbd>+<kbd>Enter</kbd> termina<br>
+  <kbd>ctrl</kbd>+<kbd>V</kbd> com imagem → entra no post · arrastar imagem também<br>
+  escrevendo: <code>[[id]]</code> liga posts · <code>#tag</code> separa · <code>**negrito**</code> <code>*itálico*</code> <code>`código`</code>
+</div></div>
+<input type="file" id="file" accept="image/*" hidden>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+{
+/* =========================================================
+   ESTADO + ARMAZENAMENTO
+   Fica salvo no navegador (localStorage).
+   "copiar backup" no painel de aparência guarda uma cópia.
+   ========================================================= */
+const KEY = 'meu-canto-v2';
+const $ = s => document.querySelector(s);
+
+const FONTS = {
+  sistema: 'ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',
+  serifada: 'Charter,"Iowan Old Style",Georgia,"Times New Roman",serif',
+  mono: 'ui-monospace,"SF Mono",Menlo,Consolas,monospace',
+  'à mão': '"Comic Sans MS","Chalkboard SE","Comic Neue",cursive',
+};
+const PATTERNS = {
+  pontos: 'radial-gradient(circle, var(--pat) 1.3px, transparent 1.7px)',
+  grade: 'linear-gradient(var(--pat) 1px, transparent 1px), linear-gradient(90deg, var(--pat) 1px, transparent 1px)',
+  pautado: 'linear-gradient(to bottom, transparent calc(100% - 1px), var(--pat) calc(100% - 1px))',
+  nada: 'none',
+};
+const SHADOWS = { suave: '0 6px 24px rgba(0,0,0,.28)', dura: '5px 5px 0 var(--border)', nenhuma: 'none' };
+const PRESETS = {
+  'noite calma': { bg:'#0f1115', pat:'#262b36', pattern:'pontos', card:'#171a21', border:'#2c3240', bw:1, radius:14, shadow:'suave', text:'#e6e8ee', muted:'#8a91a3', accent:'#7c9cff', link:'#7c9cff', bar:'#14171d', font:'sistema', footer:'#8a91a3' },
+  'caderno':     { bg:'#f3eee3', pat:'#ddd2bf', pattern:'pautado', card:'#fffdf7', border:'#e0d5c2', bw:1, radius:6, shadow:'suave', text:'#2b2620', muted:'#8c8170', accent:'#c0532f', link:'#c0532f', bar:'#ece5d6', font:'serifada', footer:'#8c8170' },
+  'caos':        { bg:'#ffe14d', pat:'#e6c62e', pattern:'grade', card:'#ffffff', border:'#111111', bw:3, radius:0, shadow:'dura', text:'#111111', muted:'#555555', accent:'#ff2e7e', link:'#2b59ff', bar:'#ffffff', font:'mono', footer:'#111111' },
+  'neblina':     { bg:'#e9edf2', pat:'#d3dae3', pattern:'pontos', card:'#ffffff', border:'#dde3ea', bw:1, radius:20, shadow:'suave', text:'#1f2733', muted:'#7d8898', accent:'#4f7cff', link:'#4f7cff', bar:'#f4f6f9', font:'sistema', footer:'#7d8898' },
+};
+const DEF_THEME = { ...PRESETS['noite calma'], col:620, gap:14, photo:'#ffffff', frame:6, footerText:'meu cantinho ✦', footerShow:true, css:'' };
+
+let S = load() || seed();
+normalize();
+
+function normalize(){
+  S.theme = { ...DEF_THEME, ...(S.theme || {}) };
+  S.view = { y: 0, z: 1, ...(S.view || {}) };
+  S.fs = S.fs || 16;
+  S.order = S.order || 'new';
+  S.title = S.title || 'meu canto';
+  S.bio = S.bio ?? 'um lugar pra tirar as coisas da cabeça.';
+  S.items = (S.items || []).map(({ x, y, w, ...it }) => it); // tira posições antigas do canvas
+  S.filter = null; S.sel = null;
+}
+function load(){ try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch(e){ return null; } }
+function snapshot(){ const { filter, sel, ...rest } = S; return rest; }
+let saveT;
+function save(){
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    try { localStorage.setItem(KEY, JSON.stringify(snapshot())); }
+    catch(e){ toast('não consegui salvar no navegador (cheio?) — copie um backup'); }
+  }, 250);
+}
+function seed(){
+  const t = Date.now();
+  return {
+    title: 'meu canto', bio: 'um lugar pra tirar as coisas da cabeça.',
+    items: [
+      { id:'bv', type:'note', k:1, created:t - 40000, text:'bem-vindo! isso aqui é seu feed.\n\n**N** escreve um post · **T** texto solto\n**scroll** ou **espaço + arrastar** sobe e desce\n**ctrl + scroll** dá zoom\n**A** muda a aparência\n\ncola uma imagem com ctrl+V que ela entra no post. #guia' },
+      { id:'lig', type:'note', k:1, created:t - 30000, text:'dá pra ligar posts escrevendo [[bv]] ou usando o botão *ligar*. a linha aparece aqui do lado esquerdo. #guia' },
+      { id:'cit', type:'note', k:1, created:t - 20000, quote:'bv', text:'e dá pra citar a si mesmo, tipo quote tweet. clica na citação pra pular até ela.' },
+      { id:'solto', type:'text', k:1.4, created:t - 10000, text:'isso é texto solto, sem caixinha. bom pra pensamento avulso.\n\ntem um código secreto bem antigo escondido aqui 🎮' },
+    ],
+  };
+}
+
+/* =========================================================
+   UTILIDADES
+   ========================================================= */
+const byId = id => S.items.find(i => i.id === id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+function uid(){ let id; do { id = Math.random().toString(36).slice(2, 6); } while (byId(id)); return id; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(ts){ return new Date(ts).toLocaleString('pt-BR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }); }
+function hour(ts){ return new Date(ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }); }
+function dayLabel(ts){
+  const d = new Date(ts), today = new Date(); today.setHours(0,0,0,0);
+  const day = new Date(d); day.setHours(0,0,0,0);
+  const diff = Math.round((today - day) / 864e5);
+  if (diff === 0) return 'hoje';
+  if (diff === 1) return 'ontem';
+  return d.toLocaleDateString('pt-BR', { day:'numeric', month:'long', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+}
+const REF_RE = /\[\[([\w-]+)\]\]/g;
+const TAG_RE = /(^|[\s(])#([\p{L}\p{N}_-]+)/gu;
+function refs(t){ return [...(t || '').matchAll(REF_RE)].map(m => m[1]); }
+function tags(t){ return [...(t || '').matchAll(TAG_RE)].map(m => m[2].toLowerCase()); }
+function typing(t){ return t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable); }
+
+function md(t){
+  let h = esc(t);
+  const codes = [];
+  h = h.replace(/`([^`\n]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+  h = h.replace(/\[\[([\w-]+)\]\]/g, (m, id) => `<a class="ref" data-ref="${id}">#${id}</a>`);
+  h = h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  h = h.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  h = h.replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  h = h.replace(TAG_RE, '$1<span class="tag" data-tag="$2">#$2</span>');
+  h = h.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[i]}</code>`);
+  return h.replace(/\n/g, '<br>');
+}
+function plain(t){ return (t || '').replace(REF_RE, '#$1').replace(/\*\*|`/g, '').replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1$2').replace(/\n+/g, ' · '); }
+
+let toastT;
+function toast(msg, label, fn){
+  const t = $('#toast');
+  t.innerHTML = `<span>${esc(msg)}</span>` + (label ? `<button>${esc(label)}</button>` : '');
+  if (label) t.querySelector('button').onclick = () => { t.classList.remove('show'); fn(); };
+  t.classList.add('show'); clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), label ? 5000 : 2400);
+}
+
+/* =========================================================
+   RENDER DO FEED
+   ========================================================= */
+const vp = $('#vp'), world = $('#world'), feed = $('#feed'), linksSvg = $('#links');
+const els = new Map();
+let editing = null, linkFrom = null, spaceDown = false;
+
+function quoteHtml(qid){
+  const q = byId(qid);
+  if (!q) return `<div class="quote" data-ref="${esc(qid)}"><div class="qh">#${esc(qid)} · não existe mais</div></div>`;
+  const s = plain(q.text);
+  return `<div class="quote" data-ref="${q.id}"><div class="qh">#${q.id} · ${fmt(q.created)}</div>${esc(s.slice(0, 200))}${s.length > 200 ? '…' : ''}${q.image ? `<img src="${q.image}" alt="">` : ''}</div>`;
+}
+function backlinks(id){ return S.items.filter(i => i.id !== id && (i.quote === id || refs(i.text).includes(id))); }
+
+function build(it){
+  const el = document.createElement('article');
+  el.className = 'item ' + (it.type === 'text' ? 'text' : 'note') + ' sz-' + (it.sz || 'm') + (isLoose(it) ? ' loose' : '') + (S.sel === it.id ? ' sel' : '') + (it.w ? ' sized' : '');
+  el.dataset.id = it.id;
+  el.style.setProperty('--k', it.k || 1);
+  el.style.setProperty('--rot', (it.rot || 0) + 'deg');
+  placeEl(el, it);
+  const n = backlinks(it.id).length;
+  el.innerHTML =
+    `<div class="head"><span class="id">#${it.id}</span><span>${hour(it.created)}</span>${it.type === 'text' ? '<span>· texto solto</span>' : ''}</div>` +
+    `<div class="body">${it.text ? md(it.text) : '<span class="empty">vazio · clique duas vezes</span>'}</div>` +
+    (it.image ? `<img class="img" src="${it.image}" alt="">` : '') +
+    (it.quote ? quoteHtml(it.quote) : '') +
+    `<div class="foot"><button data-a="edit">editar</button><button data-a="cite">citar</button><button data-a="link">ligar</button>` +
+    `<button data-a="szdown" title="balão menor">menor</button><button data-a="szup" title="balão maior">maior</button>` +
+    `<button data-a="img">${it.image ? 'trocar imagem' : 'imagem'}</button>${it.image ? '<button data-a="noimg">tirar imagem</button>' : ''}` +
+    `<button data-a="del">apagar</button>${moved(it) ? '<button data-a="reset" title="volta posição, tamanho e fonte ao normal">↺ no lugar</button>' : ''}${n ? `<button class="bl" data-a="backs" title="quem cita ou liga nesse">↩ ${n}</button>` : ''}</div><div class="rz" title="arraste pra aumentar ou diminuir"></div>`;
+  els.set(it.id, el);
+  return el;
+}
+const SIZES = ['pp', 'p', 'm', 'g', 'gg'];
+const SZK = { pp: 0.82, p: 0.92, m: 1, g: 1.3, gg: 1.7 };
+// o "tamanho" de um balão é uma largura virtual (fração da coluna).
+// arrastando o cantinho, essa fração muda e o balão encaixa no tamanho mais próximo.
+const SZV = { pp: 0.33, p: 0.5, m: 1, g: 1.3, gg: 1.65 };
+function sizeFor(f){ return f < 0.42 ? 'pp' : f < 0.75 ? 'p' : f < 1.15 ? 'm' : f < 1.48 ? 'g' : 'gg'; }
+function defK(it){ return Math.round((it.type === 'text' ? 1.4 : 1) * SZK[it.sz || 'm'] * 100) / 100; }
+function isLoose(it){ return !!it.image && !(it.text || '').trim() && !it.quote; }
+function moved(it){ return !!(it.dx || it.dy || it.w || (it.k && it.k !== defK(it)) || (it.sz && it.sz !== 'm')); }
+function placeEl(el, it){
+  el.style.transform = (it.dx || it.dy) ? `translate(${it.dx || 0}px,${it.dy || 0}px)` : '';
+  el.style.width = it.w ? it.w + 'px' : '';
+  el.classList.toggle('sized', !!it.w);
+}
+function visibleItems(){
+  return S.items
+    .filter(it => !S.filter || tags(it.text).includes(S.filter))
+    .sort((a, b) => S.order === 'new' ? b.created - a.created : a.created - b.created);
+}
+function renderAll(){
+  if (editing) finishEdit(true);
+  feed.innerHTML = ''; els.clear();
+  let lastDay = null;
+  for (const it of visibleItems()){
+    const d = dayLabel(it.created);
+    if (d !== lastDay){
+      const sep = document.createElement('div');
+      sep.className = 'day'; sep.textContent = d;
+      feed.appendChild(sep); lastDay = d;
+    }
+    feed.appendChild(build(it));
+  }
+  const n = S.items.length;
+  $('#endmark').textContent = n ? (S.filter ? `fim do #${S.filter}` : 'fim ✦') : 'nada por aqui ainda. escreve o primeiro aí em cima.';
+  const first = S.items.reduce((m, i) => Math.min(m, i.created), Date.now());
+  $('#pStats').textContent = `${n} ${n === 1 ? 'post' : 'posts'} · desde ${new Date(first).toLocaleDateString('pt-BR', { month:'long', year:'numeric' })}`;
+  drawLinksSoon();
+}
+function rebuild(id){
+  const it = byId(id), old = els.get(id);
+  if (!it || !old) return;
+  old.replaceWith(build(it));
+}
+function updateBacks(){
+  els.forEach((el, id) => {
+    const n = backlinks(id).length, foot = el.querySelector('.foot');
+    if (!foot) return;
+    let b = foot.querySelector('.bl');
+    if (n && !b){ b = document.createElement('button'); b.className = 'bl'; b.dataset.a = 'backs'; foot.appendChild(b); }
+    if (b){ if (n) b.textContent = '↩ ' + n; else b.remove(); }
+  });
+}
+
+/* linhas de ligação: arcos na margem esquerda do feed */
+function drawLinks(){
+  const out = [];
+  for (const it of S.items){
+    const seen = new Set();
+    if (it.quote){ out.push([it.id, it.quote, 'q']); seen.add(it.quote); }
+    refs(it.text).forEach(t => { if (!seen.has(t)){ seen.add(t); out.push([it.id, t, '']); } });
+  }
+  const pos = el => { const it = byId(el.dataset.id) || {}; return { x: el.offsetLeft + (it.dx || 0) - 12, y: el.offsetTop + (it.dy || 0) + Math.min(28, el.offsetHeight / 2) }; };
+  linksSvg.innerHTML = out.map(([a, b, c]) => {
+    const A = els.get(a), B = els.get(b);
+    if (!A || !B || A === B) return '';
+    const p = pos(A), q = pos(B);
+    const d = Math.min(220, 26 + Math.abs(q.y - p.y) * 0.22);
+    return `<path class="${c}" d="M${p.x},${p.y} C${Math.min(p.x, q.x) - d},${p.y} ${Math.min(p.x, q.x) - d},${q.y} ${q.x},${q.y}"/><circle cx="${p.x}" cy="${p.y}" r="3"/><circle cx="${q.x}" cy="${q.y}" r="3"/>`;
+  }).join('');
+}
+let linksRaf;
+function drawLinksSoon(){ cancelAnimationFrame(linksRaf); linksRaf = requestAnimationFrame(drawLinks); }
+world.addEventListener('load', drawLinksSoon, true);
+
+function select(id){ S.sel = id; els.forEach((el, k) => el.classList.toggle('sel', k === id)); }
+
+/* =========================================================
+   VISTA: sempre vertical, coluna centralizada, com zoom
+   ========================================================= */
+let animT;
+function sideOffset(){ return $('#look').classList.contains('open') ? $('#look').offsetWidth : 0; }
+function clampY(){
+  const z = S.view.z, h = world.offsetHeight * z, vh = vp.clientHeight;
+  const maxY = 40, minY = Math.min(maxY, vh - h - 20);
+  S.view.y = clamp(S.view.y, minY, maxY);
+}
+function applyView(anim){
+  clampY();
+  const { y, z } = S.view;
+  const left = sideOffset(), W = vp.clientWidth - left;
+  const x = left + (W - world.offsetWidth * z) / 2;
+  if (anim){
+    world.classList.add('anim'); vp.classList.add('anim');
+    clearTimeout(animT); animT = setTimeout(() => { world.classList.remove('anim'); vp.classList.remove('anim'); }, 470);
+  }
+  world.style.transform = `translate(${x}px,${y}px) scale(${z})`;
+  const g = 26 * z;
+  vp.style.backgroundSize = `${g}px ${g}px`;
+  vp.style.backgroundPosition = `${x}px ${y}px`;
+  $('#zoomLbl').textContent = Math.round(z * 100) + '%';
+}
+function zoomAt(cy, nz, anim){
+  const r = vp.getBoundingClientRect(), my = cy - r.top, z = S.view.z;
+  nz = clamp(nz, 0.25, 4);
+  S.view.y = my - (my - S.view.y) * nz / z;
+  S.view.z = nz;
+  applyView(anim); save();
+}
+function zoomCenter(f){ const r = vp.getBoundingClientRect(); zoomAt(r.top + r.height / 2, S.view.z * f, true); }
+function setZoom(z){ const r = vp.getBoundingClientRect(); zoomAt(r.top + r.height / 2, z, true); }
+function scrollBy(dy, anim){ S.view.y -= dy; applyView(anim); save(); }
+function toTop(){ S.view.y = 40; applyView(true); save(); }
+function toEnd(){ S.view.y = -1e9; applyView(true); save(); }
+function flyTo(id){
+  let el = els.get(id);
+  if (!el && S.filter && byId(id)){ setFilter(S.filter); el = els.get(id); }
+  if (!el){ toast(`#${id} não existe`); return; }
+  const vh = vp.clientHeight, z = S.view.z;
+  S.view.y = vh / 2 - (el.offsetTop + Math.min(el.offsetHeight / 2, vh / (3 * z))) * z;
+  applyView(true); save(); select(id);
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+}
+new ResizeObserver(() => applyView()).observe(vp);
+// o navegador às vezes rola sozinho ao focar algo; a gente desfaz
+vp.addEventListener('scroll', () => { vp.scrollTop = 0; vp.scrollLeft = 0; });
+new ResizeObserver(() => { applyView(); drawLinksSoon(); }).observe(world);
+
+vp.addEventListener('wheel', e => {
+  e.preventDefault();
+  const m = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? vp.clientHeight : 1;
+  const over = e.target.closest && e.target.closest('.item');
+  if (e.altKey && over){ // alt + scroll em cima de um balão: muda o tamanho só dele
+    const it = byId(over.dataset.id);
+    it.k = clamp(Math.round((it.k || 1) * Math.exp(-e.deltaY * m * 0.0015) * 100) / 100, 0.4, 5);
+    over.style.setProperty('--k', it.k); drawLinksSoon(); save(); return;
+  }
+  if (e.ctrlKey || e.metaKey) zoomAt(e.clientY, S.view.z * Math.exp(-e.deltaY * m * 0.0018));
+  else scrollBy(e.deltaY * m + (e.shiftKey ? 0 : 0));
+}, { passive: false });
+window.addEventListener('wheel', e => { if ((e.ctrlKey || e.metaKey) && !e.defaultPrevented) e.preventDefault(); }, { passive: false });
+
+/* arrastar pra subir/descer: espaço, botão do meio, fundo vazio, ou dedo */
+let drag = null;
+function startPan(e){ drag = { type: 'pan', sy: e.clientY, oy: S.view.y }; vp.classList.add('panning'); }
+vp.addEventListener('pointerdown', e => {
+  if (spaceDown || e.button === 1){ e.preventDefault(); e.stopPropagation(); startPan(e); }
+}, true);
+vp.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || drag) return;
+  const itemEl = e.target.closest('.item');
+  if (itemEl && linkFrom){ e.preventDefault(); finishLink(itemEl.dataset.id); return; }
+  const interactive = e.target.closest('textarea, button, a, [contenteditable], .quote, .tag, .ref');
+  if (!itemEl && !e.target.closest('#comp, #prof')){ if (linkFrom) cancelLink(); select(null); startPan(e); return; }
+  if (!itemEl || interactive) return;
+  if (e.pointerType === 'touch'){ startPan(e); return; }
+  const id = itemEl.dataset.id, it = byId(id);
+  select(id);
+  if (e.target.closest('.rz')){
+    e.preventDefault();
+    drag = { type: 'size', id, sx: e.clientX, sy: e.clientY, ov: SZV[it.sz || 'm'], col: world.clientWidth };
+    vp.classList.add('sizing');
+    return;
+  }
+  drag = { type: 'move', id, sx: e.clientX, sy: e.clientY, ox: it.dx || 0, oy: it.dy || 0, oview: S.view.y, moved: false };
+});
+let edgeRaf = null, lastPt = null;
+function edgeScroll(){ // arrastando perto da borda, o feed rola junto
+  edgeRaf = null;
+  if (!drag || drag.type !== 'move' || !drag.moved || !lastPt) return;
+  const r = vp.getBoundingClientRect(), m = 50;
+  let v = 0;
+  if (lastPt.y < r.top + m) v = (r.top + m - lastPt.y) / 3;
+  else if (lastPt.y > r.bottom - m) v = -(lastPt.y - (r.bottom - m)) / 3;
+  if (v){ S.view.y += v; applyView(); moveTo(lastPt); edgeRaf = requestAnimationFrame(edgeScroll); }
+}
+function moveTo(pt){
+  const it = byId(drag.id), el = els.get(drag.id);
+  if (!it || !el) return;
+  const z = S.view.z;
+  it.dx = Math.round(drag.ox + (pt.x - drag.sx) / z);
+  it.dy = Math.round(drag.oy + (pt.y - drag.sy - (S.view.y - drag.oview)) / z);
+  placeEl(el, it); drawLinksSoon();
+}
+window.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (drag.type === 'pan'){ S.view.y = drag.oy + (e.clientY - drag.sy); applyView(); return; }
+  const it = byId(drag.id), el = els.get(drag.id);
+  if (!it || !el) return;
+  if (drag.type === 'size'){
+    const d = ((e.clientX - drag.sx) + (e.clientY - drag.sy) * 0.6) / S.view.z;
+    const sz = sizeFor(drag.ov + d / drag.col);
+    if (sz !== (it.sz || 'm') || it.w){
+      it.sz = sz; delete it.w; it.k = defK(it);
+      const nu = build(it); nu.classList.add('dragging'); el.replaceWith(nu); drawLinksSoon();
+    }
+    return;
+  }
+  if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
+  if (!drag.moved){ drag.moved = true; el.classList.add('dragging'); vp.classList.add('moving'); if (editing === drag.id) finishEdit(); }
+  lastPt = { x: e.clientX, y: e.clientY };
+  moveTo(lastPt);
+  if (!edgeRaf) edgeRaf = requestAnimationFrame(edgeScroll);
+});
+window.addEventListener('pointerup', () => {
+  if (!drag) return;
+  const d = drag; drag = null; lastPt = null;
+  vp.classList.remove('panning', 'moving', 'sizing');
+  if (d.id){
+    const el = els.get(d.id); if (el) el.classList.remove('dragging');
+    if (d.moved || d.type === 'size') rebuildFoot(d.id);
+  }
+  save();
+});
+function rebuildFoot(id){ // mostra/esconde o botão "no lugar" sem recriar o balão
+  const it = byId(id), el = els.get(id); if (!it || !el) return;
+  const foot = el.querySelector('.foot'); if (!foot) return;
+  let b = foot.querySelector('[data-a="reset"]');
+  if (moved(it) && !b){ b = document.createElement('button'); b.dataset.a = 'reset'; b.title = 'volta posição, tamanho e fonte ao normal'; b.textContent = '↺ no lugar'; foot.querySelector('[data-a="del"]').after(b); }
+  if (!moved(it) && b) b.remove();
+}
+
+vp.addEventListener('dblclick', e => {
+  const itemEl = e.target.closest('.item');
+  if (!itemEl || e.target.closest('textarea, .foot, .quote, .ref, .tag, a')) return;
+  startEdit(itemEl.dataset.id);
+});
+
+/* =========================================================
+   CAIXA DE POSTAR
+   ========================================================= */
+let comp = { mode: 'note', image: null, quote: null };
+const compTxt = $('#compTxt');
+function renderComp(){
+  $('#comp').classList.toggle('textmode', comp.mode === 'text');
+  $('#cMode').textContent = comp.mode === 'text' ? 'texto solto' : 'post';
+  compTxt.placeholder = comp.mode === 'text' ? 'um pensamento solto, sem caixinha…' : 'o que tá na cabeça?   [[id]] liga · #tag separa';
+  const ib = $('#compImg'); ib.style.display = comp.image ? 'block' : 'none';
+  if (comp.image) ib.querySelector('img').src = comp.image;
+  $('#compQuote').innerHTML = comp.quote ? quoteHtml(comp.quote) + '<button class="x" id="compQuoteX" title="tirar citação">✕</button>' : '';
+  growComp();
+}
+function growComp(){ compTxt.style.height = 'auto'; compTxt.style.height = compTxt.scrollHeight + 'px'; }
+compTxt.addEventListener('input', growComp);
+function focusComp(mode){
+  if (mode) comp.mode = mode;
+  renderComp(); toTop();
+  compTxt.focus({ preventScroll: true });
+}
+function post(){
+  const text = compTxt.value.trim();
+  if (!text && !comp.image && !comp.quote) return;
+  const it = { id: uid(), type: comp.mode, sz: 'm', created: Date.now(), text };
+  it.k = defK(it);
+  if (comp.image){ it.image = comp.image; it.rot = Math.round((Math.random() * 7 - 3.5) * 10) / 10; }
+  if (comp.quote) it.quote = comp.quote;
+  S.items.push(it);
+  compTxt.value = ''; comp.image = null; comp.quote = null;
+  compTxt.blur(); // pra o espaço voltar a servir pra arrastar
+  renderComp(); renderAll(); save();
+  toast(`postado #${it.id}`);
+  if (S.order === 'old') flyTo(it.id);
+}
+$('#cPost').onclick = post;
+
+$('#cMode').onclick = () => { comp.mode = comp.mode === 'text' ? 'note' : 'text'; renderComp(); compTxt.focus({ preventScroll: true }); };
+$('#cPic').onclick = () => { imgTarget = null; $('#file').click(); };
+$('#compImgX').onclick = () => { comp.image = null; renderComp(); };
+$('#compQuote').addEventListener('click', e => {
+  if (e.target.id === 'compQuoteX'){ e.stopPropagation(); comp.quote = null; renderComp(); }
+});
+compTxt.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); post(); }
+  if (e.key === 'Escape') compTxt.blur();
+});
+
+/* =========================================================
+   EDITAR / APAGAR / LIGAR
+   ========================================================= */
+function grow(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+function startEdit(id){
+  if (editing === id) return;
+  finishEdit();
+  const it = byId(id), el = els.get(id);
+  if (!it || !el) return;
+  editing = id; select(id);
+  const ta = document.createElement('textarea');
+  ta.className = 'ed'; ta.value = it.text || '';
+  ta.placeholder = 'escreva…';
+  el.querySelector('.body').replaceWith(ta);
+  grow(ta); ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length);
+  ta.addEventListener('input', () => grow(ta));
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))){ e.preventDefault(); ta.blur(); }
+  });
+  ta.addEventListener('blur', () => finishEdit());
+}
+function finishEdit(quiet){
+  if (!editing) return;
+  const id = editing; editing = null;
+  const it = byId(id), el = els.get(id);
+  const ta = el && el.querySelector('textarea.ed');
+  if (!it) return;
+  if (ta) it.text = ta.value;
+  save();
+  if (quiet) return;
+  if (!it.text.trim() && !it.image && !it.quote){ removeItem(id, true); return; }
+  rebuild(id); updateBacks(); drawLinksSoon();
+}
+function removeItem(id, silent){
+  const idx = S.items.findIndex(i => i.id === id);
+  if (idx < 0) return;
+  const gone = S.items[idx];
+  S.items.splice(idx, 1);
+  if (S.sel === id) S.sel = null;
+  if (editing === id) editing = null;
+  renderAll(); save();
+  if (!silent) toast(`#${id} apagado`, 'desfazer', () => { S.items.push(gone); renderAll(); save(); flyTo(gone.id); });
+}
+function startLink(id){ linkFrom = id; vp.classList.add('linking'); toast('agora clique no post que você quer ligar · Esc cancela'); }
+function cancelLink(){ linkFrom = null; vp.classList.remove('linking'); }
+function finishLink(id){
+  const from = linkFrom; cancelLink();
+  if (id === from) return;
+  const a = byId(from);
+  if (refs(a.text).includes(id)){ toast('já tá ligado'); return; }
+  a.text = (a.text || '').replace(/\s*$/, '') + (a.text ? ' ' : '') + `[[${id}]]`;
+  rebuild(from); updateBacks(); drawLinksSoon(); save();
+  toast(`#${from} → #${id} ligado`);
+}
+
+/* =========================================================
+   CLIQUES
+   ========================================================= */
+let backIdx = 0, imgTarget = null;
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-a]');
+  if (a && a.closest('.item')){
+    const id = a.closest('.item').dataset.id, it = byId(id);
+    switch (a.dataset.a){
+      case 'edit': startEdit(id); break;
+      case 'cite': comp.quote = id; focusComp(); break;
+      case 'link': startLink(id); break;
+      case 'szdown': case 'szup': {
+        const i = clamp(SIZES.indexOf(it.sz || 'm') + (a.dataset.a === 'szup' ? 1 : -1), 0, SIZES.length - 1);
+        it.sz = SIZES[i]; delete it.w; it.k = defK(it);
+        rebuild(id); drawLinksSoon(); save(); break;
+      }
+      case 'reset': delete it.dx; delete it.dy; delete it.w; it.sz = 'm'; it.k = defK(it); rebuild(id); drawLinksSoon(); save(); break;
+      case 'img': imgTarget = id; $('#file').click(); break;
+      case 'noimg': delete it.image; rebuild(id); drawLinksSoon(); save(); break;
+      case 'del': removeItem(id); break;
+      case 'backs': { const b = backlinks(id); if (b.length) flyTo(b[backIdx++ % b.length].id); break; }
+    }
+    return;
+  }
+  const ref = e.target.closest('.ref, .quote');
+  if (ref && ref.dataset.ref){ e.preventDefault(); flyTo(ref.dataset.ref); return; }
+  const tag = e.target.closest('.tag');
+  if (tag){ setFilter(tag.dataset.tag.toLowerCase()); }
+});
+function setFilter(t){
+  S.filter = S.filter === t ? null : t;
+  const chip = $('#chip');
+  chip.style.display = S.filter ? 'inline-block' : 'none';
+  chip.textContent = S.filter ? `#${S.filter}  ✕` : '';
+  renderAll(); toTop();
+}
+$('#chip').onclick = () => setFilter(S.filter);
+
+/* =========================================================
+   IMAGENS
+   ========================================================= */
+function compress(file){
+  return new Promise((res, rej) => {
+    if (file.type === 'image/gif' && file.size < 1.5e6){
+      const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); return;
+    }
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, 1400 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      const g = c.getContext('2d');
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('imagem inválida')); };
+    img.src = url;
+  });
+}
+function imageFrom(dt){
+  for (const f of (dt && dt.files) || []) if (f.type.startsWith('image/')) return f;
+  for (const i of (dt && dt.items) || []) if (i.kind === 'file' && i.type.startsWith('image/')) return i.getAsFile();
+  return null;
+}
+async function attach(id, file){
+  const it = byId(id); if (!it) return;
+  it.image = await compress(file);
+  if (it.rot == null) it.rot = Math.round((Math.random() * 7 - 3.5) * 10) / 10;
+  const el = els.get(id);
+  if (editing === id && el){
+    let img = el.querySelector('.img');
+    if (!img){ img = document.createElement('img'); img.className = 'img'; el.querySelector('textarea.ed').after(img); }
+    img.src = it.image;
+  } else rebuild(id);
+  drawLinksSoon(); save();
+}
+async function toComposer(file){ comp.image = await compress(file); renderComp(); toTop(); compTxt.focus({ preventScroll: true }); }
+document.addEventListener('paste', async e => {
+  const file = imageFrom(e.clipboardData), act = document.activeElement;
+  if (act && act.classList.contains('ed') && editing){ if (file){ e.preventDefault(); attach(editing, file); } return; }
+  if (act === compTxt){ if (file){ e.preventDefault(); toComposer(file); } return; }
+  if (typing(act)) return;
+  e.preventDefault();
+  if (file) toComposer(file);
+  else {
+    const txt = e.clipboardData.getData('text');
+    if (txt){ compTxt.value += txt; renderComp(); toTop(); compTxt.focus({ preventScroll: true }); }
+  }
+});
+vp.addEventListener('dragover', e => e.preventDefault());
+vp.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = imageFrom(e.dataTransfer);
+  if (!f) return;
+  const itemEl = e.target.closest('.item');
+  if (itemEl) attach(itemEl.dataset.id, f); else toComposer(f);
+});
+$('#file').onchange = e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  if (imgTarget && byId(imgTarget)) attach(imgTarget, f); else toComposer(f);
+  imgTarget = null;
+};
+
+/* =========================================================
+   PERFIL
+   ========================================================= */
+const pTitle = $('#pTitle'), pBio = $('#pBio');
+pTitle.addEventListener('input', () => { S.title = pTitle.textContent.trim() || 'meu canto'; $('#barTitle').textContent = S.title; document.title = S.title; save(); });
+pBio.addEventListener('input', () => { S.bio = pBio.textContent; save(); });
+[pTitle, pBio].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); el.blur(); } }));
+
+/* =========================================================
+   APARÊNCIA (cada pedaço da interface é editável)
+   ========================================================= */
+const look = $('#look');
+const FIELDS = [
+  ['fundo'],
+  ['cor do fundo', 'bg', 'color'],
+  ['padrão do fundo', 'pattern', 'select', Object.keys(PATTERNS)],
+  ['cor do padrão', 'pat', 'color'],
+  ['feed'],
+  ['largura da coluna', 'col', 'range', 360, 960],
+  ['espaço entre posts', 'gap', 'range', 0, 48],
+  ['posts (outbox)'],
+  ['fundo do post', 'card', 'color'],
+  ['borda', 'border', 'color'],
+  ['espessura da borda', 'bw', 'range', 0, 6],
+  ['arredondamento', 'radius', 'range', 0, 40],
+  ['sombra', 'shadow', 'select', Object.keys(SHADOWS)],
+  ['fotos jogadas (imagem sem texto)'],
+  ['moldura', 'photo', 'color'],
+  ['espessura da moldura', 'frame', 'range', 0, 16],
+  ['texto'],
+  ['fonte', 'font', 'select', Object.keys(FONTS)],
+  ['cor do texto', 'text', 'color'],
+  ['texto secundário', 'muted', 'color'],
+  ['destaque (ids, tags)', 'accent', 'color'],
+  ['linhas de ligação', 'link', 'color'],
+  ['barra e painel'],
+  ['cor da barra', 'bar', 'color'],
+  ['rodapé'],
+  ['texto do rodapé', 'footerText', 'text'],
+  ['cor do rodapé', 'footer', 'color'],
+  ['mostrar rodapé', 'footerShow', 'checkbox'],
+];
+function applyTheme(){
+  const t = S.theme, r = document.documentElement.style;
+  const set = (k, v) => r.setProperty(k, v);
+  set('--bg', t.bg); set('--pat', t.pat); set('--card', t.card); set('--border', t.border);
+  set('--bw', t.bw + 'px'); set('--radius', t.radius + 'px'); set('--shadow', SHADOWS[t.shadow] || SHADOWS.suave);
+  set('--text', t.text); set('--muted', t.muted); set('--accent', t.accent); set('--link', t.link);
+  set('--bar', t.bar); set('--font', FONTS[t.font] || FONTS.sistema); set('--footer', t.footer);
+  set('--col', t.col + 'px'); set('--gap', t.gap + 'px'); set('--photo', t.photo); set('--frame', t.frame + 'px'); set('--fs', S.fs + 'px');
+  vp.style.backgroundImage = PATTERNS[t.pattern] || 'none';
+  const pf = $('#pfoot'); pf.textContent = t.footerText; pf.style.display = t.footerShow ? 'block' : 'none';
+  $('#customCss').textContent = t.css || '';
+  applyView(); drawLinksSoon();
+}
+function renderLook(){
+  const t = S.theme;
+  let h = `<h3>combinações prontas</h3><div class="presets">${Object.keys(PRESETS).map(p => `<button data-preset="${p}">${p}</button>`).join('')}</div>`;
+  for (const [label, key, type, a, b] of FIELDS){
+    if (!key){ h += `<h3>${label}</h3>`; continue; }
+    let input;
+    if (type === 'color') input = `<input type="color" data-k="${key}" value="${t[key]}">`;
+    else if (type === 'range') input = `<input type="range" data-k="${key}" min="${a}" max="${b}" value="${t[key]}">`;
+    else if (type === 'select') input = `<select data-k="${key}">${a.map(o => `<option ${o === t[key] ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+    else if (type === 'checkbox') input = `<input type="checkbox" data-k="${key}" ${t[key] ? 'checked' : ''}>`;
+    else input = `<input type="text" data-k="${key}" value="${esc(t[key])}">`;
+    h += `<div class="fr"><label>${label}</label>${input}</div>`;
+  }
+  h += `<h3>css livre</h3><textarea data-k="css" spellcheck="false" placeholder="/* mude qualquer coisa, ex: */\n.note { transform: rotate(-0.5deg); }\n#pTitle { letter-spacing: -0.03em; }">${esc(t.css || '')}</textarea>`;
+  h += `<h3>backup</h3><button class="lbtn" id="cpy">copiar backup</button><button class="lbtn" id="imp">importar backup (.json)</button><button class="lbtn" id="resetLook">voltar aparência padrão</button>`;
+  look.innerHTML = h;
+}
+look.addEventListener('input', e => {
+  const k = e.target.dataset.k; if (!k) return;
+  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value;
+  S.theme[k] = v; applyTheme(); save();
+});
+look.addEventListener('click', e => {
+  const p = e.target.dataset.preset;
+  if (p){ S.theme = { ...S.theme, ...PRESETS[p] }; applyTheme(); renderLook(); save(); return; }
+  if (e.target.id === 'cpy') copyAll();
+  if (e.target.id === 'imp') $('#importFile').click();
+  if (e.target.id === 'resetLook'){ S.theme = { ...DEF_THEME }; applyTheme(); renderLook(); save(); }
+});
+function toggleLook(force){
+  const open = force ?? !look.classList.contains('open');
+  look.classList.toggle('open', open); $('#bLook').classList.toggle('on', open);
+  if (open) renderLook();
+  applyView(true);
+}
+async function copyAll(){
+  try { await navigator.clipboard.writeText(JSON.stringify(snapshot())); toast('backup copiado — cole num arquivo .json'); }
+  catch(e){ toast('o navegador não deixou copiar'); }
+}
+$('#importFile').onchange = e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const d = JSON.parse(fr.result);
+      if (!Array.isArray(d.items)) throw 0;
+      const before = JSON.parse(JSON.stringify(snapshot()));
+      S = d; normalize(); boot(); save();
+      toast('backup importado', 'desfazer', () => { S = before; normalize(); boot(); save(); });
+    } catch(err){ toast('esse arquivo não parece um backup válido'); }
+  };
+  fr.readAsText(f);
+};
+
+/* =========================================================
+   BARRA + TECLADO
+   ========================================================= */
+function setFs(v){ S.fs = clamp(v, 10, 32); document.documentElement.style.setProperty('--fs', S.fs + 'px'); drawLinksSoon(); save(); }
+$('#bNote').onclick = () => focusComp('note');
+$('#bText').onclick = () => focusComp('text');
+$('#fsUp').onclick = () => setFs(S.fs + 1);
+$('#fsDown').onclick = () => setFs(S.fs - 1);
+$('#zIn').onclick = () => zoomCenter(1.25);
+$('#zOut').onclick = () => zoomCenter(1 / 1.25);
+$('#zoomLbl').onclick = () => setZoom(1);
+$('#bTop').onclick = toTop;
+$('#bLook').onclick = () => toggleLook();
+$('#bHelp').onclick = () => $('#help').classList.toggle('open');
+$('#help').onclick = () => $('#help').classList.remove('open');
+function setOrderLabel(){ $('#bOrder').textContent = S.order === 'new' ? 'mais novos ↓' : 'mais antigos ↓'; }
+$('#bOrder').onclick = () => { S.order = S.order === 'new' ? 'old' : 'new'; setOrderLabel(); renderAll(); toTop(); save(); };
+
+function step(dir){
+  const ids = [...els.keys()];
+  if (!ids.length) return;
+  let i = ids.indexOf(S.sel);
+  i = i < 0 ? 0 : clamp(i + dir, 0, ids.length - 1);
+  flyTo(ids[i]);
+}
+window.addEventListener('keydown', e => {
+  konami(e);
+  if (typing(e.target)) return;
+  if (e.code === 'Space'){ e.preventDefault(); if (!spaceDown){ spaceDown = true; vp.classList.add('pan'); } return; }
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && (e.key === '=' || e.key === '+')){ e.preventDefault(); zoomCenter(1.25); return; }
+  if (mod && e.key === '-'){ e.preventDefault(); zoomCenter(1 / 1.25); return; }
+  if (mod && e.key === '0'){ e.preventDefault(); setZoom(1); return; }
+  if (mod || e.altKey) return;
+  switch (e.key.toLowerCase()){
+    case 'n': e.preventDefault(); focusComp('note'); break;
+    case 't': e.preventDefault(); focusComp('text'); break;
+    case 'a': toggleLook(); break;
+    case 'j': step(1); break;
+    case 'k': step(-1); break;
+    case 'arrowdown': e.preventDefault(); scrollBy(80); break;
+    case 'arrowup': e.preventDefault(); scrollBy(-80); break;
+    case 'pagedown': e.preventDefault(); scrollBy(vp.clientHeight * 0.85, true); break;
+    case 'pageup': e.preventDefault(); scrollBy(-vp.clientHeight * 0.85, true); break;
+    case 'home': toTop(); break;
+    case 'end': toEnd(); break;
+    case '?': $('#help').classList.toggle('open'); break;
+    case 'enter': if (S.sel){ e.preventDefault(); startEdit(S.sel); } break;
+    case 'delete': case 'backspace': if (S.sel) removeItem(S.sel); break;
+    case 'escape': cancelLink(); select(null); $('#help').classList.remove('open'); if (S.filter) setFilter(S.filter); break;
+  }
+});
+window.addEventListener('keyup', e => { if (e.code === 'Space'){ spaceDown = false; vp.classList.remove('pan'); } });
+window.addEventListener('blur', () => { spaceDown = false; vp.classList.remove('pan'); });
+
+/* =========================================================
+   SEGREDOS 🤫
+   ========================================================= */
+const KONAMI = ['arrowup','arrowup','arrowdown','arrowdown','arrowleft','arrowright','arrowleft','arrowright','b','a'];
+let kIdx = 0;
+function konami(e){
+  const k = e.key.toLowerCase();
+  kIdx = k === KONAMI[kIdx] ? kIdx + 1 : (k === KONAMI[0] ? 1 : 0);
+  if (kIdx === KONAMI.length){
+    kIdx = 0;
+    const on = document.body.classList.toggle('party');
+    toast(on ? 'modo festa ligado 🎉' : 'festa acabou, todo mundo pra casa');
+    if (on) confetti();
+  }
+}
+function confetti(){
+  const em = ['✦','🎉','✨','💫','🌈','⭐','🍓','🎈'];
+  for (let i = 0; i < 46; i++){
+    const s = document.createElement('span');
+    s.className = 'confetti'; s.textContent = em[i % em.length];
+    s.style.left = Math.random() * 100 + 'vw';
+    s.style.animationDuration = 2 + Math.random() * 2.5 + 's';
+    s.style.animationDelay = Math.random() * 0.6 + 's';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 5500);
+  }
+}
+let dots = 0, dotT;
+$('#dot').onclick = () => {
+  dots++; clearTimeout(dotT); dotT = setTimeout(() => dots = 0, 900);
+  if (dots >= 5){
+    dots = 0;
+    const c = document.createElement('canvas').getContext('2d');
+    c.fillStyle = `hsl(${Math.floor(Math.random() * 360)} 85% 62%)`;
+    S.theme.accent = S.theme.link = c.fillStyle;
+    applyTheme(); if (look.classList.contains('open')) renderLook(); save();
+    toast('cor nova sorteada ✦');
+  }
+};
+
+/* =========================================================
+   INÍCIO
+   ========================================================= */
+function boot(){
+  pTitle.textContent = S.title; pBio.textContent = S.bio;
+  $('#barTitle').textContent = S.title; document.title = S.title;
+  setOrderLabel(); applyTheme(); renderComp(); renderAll(); applyView();
+  if (look.classList.contains('open')) renderLook();
+}
+boot();
+}
+</script>
+</body>
+</html>
