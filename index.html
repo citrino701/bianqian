@@ -157,6 +157,25 @@ textarea.ed::placeholder{color:var(--muted)}
 #help .box{background:var(--card);border:var(--bw) solid var(--border);border-radius:var(--radius);padding:22px 26px;max-width:480px;width:90%;font-size:14px;line-height:1.9;box-shadow:var(--shadow)}
 #help kbd{background:rgba(127,127,127,.2);border-radius:5px;padding:1px 6px;font-family:inherit;font-size:12px}
 
+/* ---------- login, cadeado, modo leitura ---------- */
+#sync{font-size:12px;color:var(--muted);margin-left:8px;white-space:nowrap}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:45}
+.modal.open{display:flex}
+.modal .box,#lock .box{background:var(--card);border:var(--bw) solid var(--border);border-radius:var(--radius);padding:24px 26px;width:min(380px,92vw);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px}
+.modal b,#lock b{font-size:18px}
+.modal .sub,#lock p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.modal input{background:var(--bg);color:var(--text);border:var(--bw) solid var(--border);border-radius:10px;padding:11px 12px;font:inherit;font-size:16px;outline:none}
+.modal input:focus{border-color:var(--accent)}
+.arow{display:flex;align-items:center;gap:8px;margin-top:4px}
+.arow .sp{flex:1}
+#authMsg:empty{display:none}
+#lock{position:fixed;inset:48px 0 0 0;display:none;align-items:center;justify-content:center;z-index:16;background:var(--bg)}
+#lock.open{display:flex}
+#lock .box{align-items:flex-start}
+#lock .big{font-size:34px;color:var(--accent)}
+body.ro #comp,body.ro .foot,body.ro .rz,body.ro #bNote,body.ro #bText,body.ro #bLook{display:none!important}
+body.ro .item{cursor:default}
+
 /* ---------- segredos ---------- */
 body.party .note{animation:hue 2.5s linear infinite}
 @keyframes hue{to{filter:hue-rotate(360deg)}}
@@ -169,7 +188,7 @@ body.party .note{animation:hue 2.5s linear infinite}
 
 <header id="bar">
   <span class="dot" id="dot"></span>
-  <span class="title" id="barTitle">meu canto</span>
+  <span class="title" id="barTitle">meu canto</span><span id="sync"></span>
   <span class="sep"></span>
   <button class="btn" id="bNote">+ post<kbd>N</kbd></button>
   <button class="btn" id="bText">+ texto<kbd>T</kbd></button>
@@ -186,6 +205,7 @@ body.party .note{animation:hue 2.5s linear infinite}
   <button class="btn" id="bTop" title="voltar pro topo">⤒</button>
   <span class="sep"></span>
   <button class="btn" id="bLook">aparência<kbd>A</kbd></button>
+  <button class="btn" id="bAuth">entrar</button>
   <button class="btn" id="bHelp">?</button>
 </header>
 
@@ -215,6 +235,15 @@ body.party .note{animation:hue 2.5s linear infinite}
 </main>
 
 <aside id="look"></aside>
+<div id="lock"><div class="box"><div class="big">✦</div><b id="lockTitle">esse canto é privado</b><p id="lockSub">só a dona ou o dono consegue ver.</p><button class="post" id="lockBtn">entrar</button></div></div>
+<div id="auth" class="modal"><form class="box" id="authForm" autocomplete="on">
+  <b id="authTitle">entrar</b>
+  <p class="sub" id="authSub"></p>
+  <input type="email" id="authEmail" placeholder="email" required autocomplete="email">
+  <input type="password" id="authPass" placeholder="senha (mínimo 6)" required minlength="6" autocomplete="current-password">
+  <div class="arow"><button type="button" class="btn" id="authCancel">cancelar</button><span class="sp"></span><button type="submit" class="post" id="authGo">entrar</button></div>
+  <p class="sub" id="authMsg"></p>
+</form></div>
 <div id="pfoot"></div>
 <div id="toast"></div>
 <div id="help"><div class="box">
@@ -235,14 +264,19 @@ body.party .note{animation:hue 2.5s linear infinite}
 <input type="file" id="file" accept="image/*" hidden>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 {
 /* =========================================================
-   ESTADO + ARMAZENAMENTO
-   Fica salvo no navegador (localStorage).
-   "copiar backup" no painel de aparência guarda uma cópia.
+   ESTADO + BANCO (Supabase)
+   Os posts e a aparência ficam no Supabase. Só a dona/o dono
+   (a primeira conta criada) consegue escrever. Zoom e rolagem
+   ficam salvos só neste navegador.
    ========================================================= */
-const KEY = 'meu-canto-v2';
+const SB_URL = 'https://mbdsegwprcqakumrcjxh.supabase.co';
+const SB_KEY = 'sb_publishable_-Jl9sAlSdGP34wCSAsYauA_we5wQ337'; // chave pública, pode ficar no código
+const sb = window.supabase.createClient(SB_URL, SB_KEY);
+const VIEW_KEY = 'meu-canto-view', SITE_CACHE = 'meu-canto-site', OLD_KEY = 'meu-canto-v2';
 const $ = s => document.querySelector(s);
 
 const FONTS = {
@@ -266,9 +300,13 @@ const PRESETS = {
 };
 const DEF_THEME = { ...PRESETS['noite calma'], col:620, gap:14, photo:'#ffffff', frame:6, footerText:'meu cantinho ✦', footerShow:true, css:'' };
 
-let S = load() || seed();
+let S = { items: [], ...readJSON(SITE_CACHE), view: readJSON(VIEW_KEY) };
 normalize();
+let me = null, siteOwner = null, isOwner = false, ready = false;
+let synced = new Map(), syncedSite = '';
 
+function readJSON(k){ try { return JSON.parse(localStorage.getItem(k)) || {}; } catch(e){ return {}; } }
+function writeJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
 function normalize(){
   S.theme = { ...DEF_THEME, ...(S.theme || {}) };
   S.view = { y: 0, z: 1, ...(S.view || {}) };
@@ -276,30 +314,105 @@ function normalize(){
   S.order = S.order || 'new';
   S.title = S.title || 'meu canto';
   S.bio = S.bio ?? 'um lugar pra tirar as coisas da cabeça.';
-  S.items = (S.items || []).map(({ x, y, w, ...it }) => it); // tira posições antigas do canvas
+  S.public = !!S.public;
+  S.items = (S.items || []).map(({ x, y, ...it }) => it);
   S.filter = null; S.sel = null;
 }
-function load(){ try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch(e){ return null; } }
-function snapshot(){ const { filter, sel, ...rest } = S; return rest; }
-let saveT;
-function save(){
-  clearTimeout(saveT);
-  saveT = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(snapshot())); }
-    catch(e){ toast('não consegui salvar no navegador (cheio?) — copie um backup'); }
-  }, 250);
+function siteCore(){ return { title: S.title, bio: S.bio, public: S.public, settings: { theme: S.theme, fs: S.fs, order: S.order } }; }
+function snapshot(){ return { title: S.title, bio: S.bio, theme: S.theme, fs: S.fs, order: S.order, items: S.items.map(({ _up, ...i }) => i) }; }
+function toRow(it){
+  return { id: it.id, type: it.type || 'note', body: it.text || '', image_path: it.image_path || null, quote: it.quote || null,
+    sz: it.sz || 'm', k: it.k ?? null, dx: Math.round(it.dx || 0), dy: Math.round(it.dy || 0),
+    w: it.w ? Math.round(it.w) : null, rot: it.rot || 0, created: it.created };
 }
-function seed(){
-  const t = Date.now();
-  return {
-    title: 'meu canto', bio: 'um lugar pra tirar as coisas da cabeça.',
-    items: [
-      { id:'bv', type:'note', k:1, created:t - 40000, text:'bem-vindo! isso aqui é seu feed.\n\n**N** escreve um post · **T** texto solto\n**scroll** ou **espaço + arrastar** sobe e desce\n**ctrl + scroll** dá zoom\n**A** muda a aparência\n\ncola uma imagem com ctrl+V que ela entra no post. #guia' },
-      { id:'lig', type:'note', k:1, created:t - 30000, text:'dá pra ligar posts escrevendo [[bv]] ou usando o botão *ligar*. a linha aparece aqui do lado esquerdo. #guia' },
-      { id:'cit', type:'note', k:1, created:t - 20000, quote:'bv', text:'e dá pra citar a si mesmo, tipo quote tweet. clica na citação pra pular até ela.' },
-      { id:'solto', type:'text', k:1.4, created:t - 10000, text:'isso é texto solto, sem caixinha. bom pra pensamento avulso.\n\ntem um código secreto bem antigo escondido aqui 🎮' },
-    ],
-  };
+function fromRow(r){
+  const it = { id: r.id, type: r.type, text: r.body || '', sz: r.sz || 'm', created: +r.created };
+  if (r.k != null) it.k = r.k;
+  if (r.image_path) it.image_path = r.image_path;
+  if (r.quote) it.quote = r.quote;
+  if (r.dx) it.dx = r.dx; if (r.dy) it.dy = r.dy; if (r.w) it.w = r.w; if (r.rot) it.rot = r.rot;
+  return it;
+}
+
+/* salvar: compara com o que já está no banco e manda só o que mudou */
+let saveT, syncing = false, again = false, pending = false;
+function save(){
+  writeJSON(VIEW_KEY, S.view);
+  if (!isOwner || !ready) return;
+  pending = true; setStatus('…');
+  clearTimeout(saveT); saveT = setTimeout(sync, 700);
+}
+function setStatus(t){ $('#sync').textContent = t; }
+async function sync(){
+  if (syncing){ again = true; return; }
+  syncing = true; setStatus('salvando…');
+  try {
+    for (const it of S.items){ // imagens novas sobem pro storage
+      if (it.image && it.image.startsWith('data:') && it._up !== it.image){
+        const blob = await (await fetch(it.image)).blob();
+        const path = `${it.id}-${Date.now()}.jpg`;
+        const { error } = await sb.storage.from('imagens').upload(path, blob, { contentType: blob.type || 'image/jpeg' });
+        if (error) throw error;
+        if (it.image_path) sb.storage.from('imagens').remove([it.image_path]);
+        it.image_path = path; it._up = it.image;
+      } else if (!it.image && it.image_path){
+        sb.storage.from('imagens').remove([it.image_path]);
+        delete it.image_path;
+      }
+    }
+    const rows = S.items.map(toRow).filter(r => synced.get(r.id) !== JSON.stringify(r));
+    if (rows.length){
+      const { error } = await sb.from('posts').upsert(rows);
+      if (error) throw error;
+      rows.forEach(r => synced.set(r.id, JSON.stringify(r)));
+    }
+    const ids = new Set(S.items.map(i => i.id));
+    const gone = [...synced.keys()].filter(id => !ids.has(id));
+    if (gone.length){
+      const { error } = await sb.from('posts').delete().in('id', gone);
+      if (error) throw error;
+      gone.forEach(id => synced.delete(id));
+    }
+    const core = siteCore(), cj = JSON.stringify(core);
+    if (cj !== syncedSite){
+      const { error } = await sb.from('site').update({ ...core, updated_at: new Date().toISOString() }).eq('id', 1);
+      if (error) throw error;
+      syncedSite = cj; writeJSON(SITE_CACHE, { title: S.title, bio: S.bio, theme: S.theme, fs: S.fs, order: S.order });
+    }
+    pending = false; setStatus('');
+  } catch(e){
+    setStatus('não salvou ⚠');
+    toast('não consegui salvar: ' + (e.message || e), 'tentar de novo', sync);
+  }
+  syncing = false;
+  if (again){ again = false; sync(); }
+}
+window.addEventListener('beforeunload', e => { if (pending){ e.preventDefault(); e.returnValue = ''; } });
+
+async function signAll(items){
+  const paths = items.filter(i => i.image_path).map(i => i.image_path);
+  if (!paths.length) return;
+  const { data } = await sb.storage.from('imagens').createSignedUrls(paths, 60 * 60 * 24 * 7);
+  (data || []).forEach(d => { if (!d.signedUrl) return; items.filter(i => i.image_path === d.path).forEach(i => i.image = d.signedUrl); });
+}
+async function loadRemote(){
+  const { data: site, error: e1 } = await sb.from('site').select('*').eq('id', 1).single();
+  if (e1) throw e1;
+  siteOwner = site.owner;
+  isOwner = !!me && me.id === siteOwner;
+  const st = site.settings || {};
+  S.title = site.title; S.bio = site.bio; S.public = site.public;
+  if (st.theme) S.theme = st.theme;
+  if (st.fs) S.fs = st.fs;
+  if (st.order) S.order = st.order;
+  const { data: posts, error: e2 } = await sb.from('posts').select('*').order('created', { ascending: false });
+  if (e2) throw e2;
+  S.items = posts.map(fromRow);
+  normalize();
+  await signAll(S.items);
+  synced = new Map(posts.map(r => [r.id, JSON.stringify(toRow(fromRow(r)))]));
+  syncedSite = JSON.stringify(siteCore());
+  writeJSON(SITE_CACHE, { title: S.title, bio: S.bio, theme: S.theme, fs: S.fs, order: S.order });
 }
 
 /* =========================================================
@@ -416,9 +529,9 @@ function renderAll(){
     feed.appendChild(build(it));
   }
   const n = S.items.length;
-  $('#endmark').textContent = n ? (S.filter ? `fim do #${S.filter}` : 'fim ✦') : 'nada por aqui ainda. escreve o primeiro aí em cima.';
+  $('#endmark').textContent = !ready ? 'carregando…' : n ? (S.filter ? `fim do #${S.filter}` : 'fim ✦') : (isOwner ? 'nada por aqui ainda. escreve o primeiro aí em cima.' : 'nada por aqui ainda.');
   const first = S.items.reduce((m, i) => Math.min(m, i.created), Date.now());
-  $('#pStats').textContent = `${n} ${n === 1 ? 'post' : 'posts'} · desde ${new Date(first).toLocaleDateString('pt-BR', { month:'long', year:'numeric' })}`;
+  $('#pStats').textContent = !n ? '' : `${n} ${n === 1 ? 'post' : 'posts'} · desde ${new Date(first).toLocaleDateString('pt-BR', { month:'long', year:'numeric' })}`;
   drawLinksSoon();
 }
 function rebuild(id){
@@ -514,7 +627,7 @@ vp.addEventListener('wheel', e => {
   e.preventDefault();
   const m = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? vp.clientHeight : 1;
   const over = e.target.closest && e.target.closest('.item');
-  if (e.altKey && over){ // alt + scroll em cima de um balão: muda o tamanho só dele
+  if (e.altKey && over && isOwner){ // alt + scroll em cima de um balão: muda o tamanho só dele
     const it = byId(over.dataset.id);
     it.k = clamp(Math.round((it.k || 1) * Math.exp(-e.deltaY * m * 0.0015) * 100) / 100, 0.4, 5);
     over.style.setProperty('--k', it.k); drawLinksSoon(); save(); return;
@@ -537,6 +650,7 @@ vp.addEventListener('pointerdown', e => {
   const interactive = e.target.closest('textarea, button, a, [contenteditable], .quote, .tag, .ref');
   if (!itemEl && !e.target.closest('#comp, #prof')){ if (linkFrom) cancelLink(); select(null); startPan(e); return; }
   if (!itemEl || interactive) return;
+  if (!isOwner){ startPan(e); return; } // visitante: arrastar só rola
   if (e.pointerType === 'touch'){ startPan(e); return; }
   const id = itemEl.dataset.id, it = byId(id);
   select(id);
@@ -627,11 +741,13 @@ function renderComp(){
 function growComp(){ compTxt.style.height = 'auto'; compTxt.style.height = compTxt.scrollHeight + 'px'; }
 compTxt.addEventListener('input', growComp);
 function focusComp(mode){
+  if (!isOwner) return;
   if (mode) comp.mode = mode;
   renderComp(); toTop();
   compTxt.focus({ preventScroll: true });
 }
 function post(){
+  if (!isOwner) return;
   const text = compTxt.value.trim();
   if (!text && !comp.image && !comp.quote) return;
   const it = { id: uid(), type: comp.mode, sz: 'm', created: Date.now(), text };
@@ -663,6 +779,7 @@ compTxt.addEventListener('keydown', e => {
    ========================================================= */
 function grow(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 function startEdit(id){
+  if (!isOwner) return;
   if (editing === id) return;
   finishEdit();
   const it = byId(id), el = els.get(id);
@@ -692,6 +809,7 @@ function finishEdit(quiet){
   rebuild(id); updateBacks(); drawLinksSoon();
 }
 function removeItem(id, silent){
+  if (!isOwner) return;
   const idx = S.items.findIndex(i => i.id === id);
   if (idx < 0) return;
   const gone = S.items[idx];
@@ -719,7 +837,7 @@ function finishLink(id){
 let backIdx = 0, imgTarget = null;
 document.addEventListener('click', e => {
   const a = e.target.closest('[data-a]');
-  if (a && a.closest('.item')){
+  if (a && a.closest('.item') && (isOwner || a.dataset.a === 'backs')){
     const id = a.closest('.item').dataset.id, it = byId(id);
     switch (a.dataset.a){
       case 'edit': startEdit(id); break;
@@ -794,6 +912,7 @@ async function attach(id, file){
 }
 async function toComposer(file){ comp.image = await compress(file); renderComp(); toTop(); compTxt.focus({ preventScroll: true }); }
 document.addEventListener('paste', async e => {
+  if (!isOwner) return;
   const file = imageFrom(e.clipboardData), act = document.activeElement;
   if (act && act.classList.contains('ed') && editing){ if (file){ e.preventDefault(); attach(editing, file); } return; }
   if (act === compTxt){ if (file){ e.preventDefault(); toComposer(file); } return; }
@@ -808,6 +927,7 @@ document.addEventListener('paste', async e => {
 vp.addEventListener('dragover', e => e.preventDefault());
 vp.addEventListener('drop', e => {
   e.preventDefault();
+  if (!isOwner) return;
   const f = imageFrom(e.dataTransfer);
   if (!f) return;
   const itemEl = e.target.closest('.item');
@@ -888,12 +1008,14 @@ function renderLook(){
     else input = `<input type="text" data-k="${key}" value="${esc(t[key])}">`;
     h += `<div class="fr"><label>${label}</label>${input}</div>`;
   }
+  h += `<h3>quem vê</h3><div class="fr"><label>feed público (qualquer um com o link lê)</label><input type="checkbox" data-k="__public" ${S.public ? 'checked' : ''}></div>`;
   h += `<h3>css livre</h3><textarea data-k="css" spellcheck="false" placeholder="/* mude qualquer coisa, ex: */\n.note { transform: rotate(-0.5deg); }\n#pTitle { letter-spacing: -0.03em; }">${esc(t.css || '')}</textarea>`;
   h += `<h3>backup</h3><button class="lbtn" id="cpy">copiar backup</button><button class="lbtn" id="imp">importar backup (.json)</button><button class="lbtn" id="resetLook">voltar aparência padrão</button>`;
   look.innerHTML = h;
 }
 look.addEventListener('input', e => {
   const k = e.target.dataset.k; if (!k) return;
+  if (k === '__public'){ S.public = e.target.checked; save(); toast(S.public ? 'agora qualquer um com o link lê (só você posta)' : 'agora só você vê'); return; }
   const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value;
   S.theme[k] = v; applyTheme(); save();
 });
@@ -905,6 +1027,7 @@ look.addEventListener('click', e => {
   if (e.target.id === 'resetLook'){ S.theme = { ...DEF_THEME }; applyTheme(); renderLook(); save(); }
 });
 function toggleLook(force){
+  if (!isOwner && force !== false) return;
   const open = force ?? !look.classList.contains('open');
   look.classList.toggle('open', open); $('#bLook').classList.toggle('on', open);
   if (open) renderLook();
@@ -922,9 +1045,10 @@ $('#importFile').onchange = e => {
     try {
       const d = JSON.parse(fr.result);
       if (!Array.isArray(d.items)) throw 0;
-      const before = JSON.parse(JSON.stringify(snapshot()));
-      S = d; normalize(); boot(); save();
-      toast('backup importado', 'desfazer', () => { S = before; normalize(); boot(); save(); });
+      const before = { items: S.items, theme: S.theme, title: S.title, bio: S.bio };
+      const put = x => { S.items = x.items.map(({ x: _x, y: _y, _up, ...i }) => i); if (x.theme) S.theme = { ...DEF_THEME, ...x.theme }; if (x.title) S.title = x.title; if (x.bio != null) S.bio = x.bio; boot(); save(); };
+      put(d);
+      toast('backup importado', 'desfazer', () => put(before));
     } catch(err){ toast('esse arquivo não parece um backup válido'); }
   };
   fr.readAsText(f);
@@ -977,8 +1101,8 @@ window.addEventListener('keydown', e => {
     case 'home': toTop(); break;
     case 'end': toEnd(); break;
     case '?': $('#help').classList.toggle('open'); break;
-    case 'enter': if (S.sel){ e.preventDefault(); startEdit(S.sel); } break;
-    case 'delete': case 'backspace': if (S.sel) removeItem(S.sel); break;
+    case 'enter': if (S.sel && isOwner){ e.preventDefault(); startEdit(S.sel); } break;
+    case 'delete': case 'backspace': if (S.sel && isOwner) removeItem(S.sel); break;
     case 'escape': cancelLink(); select(null); $('#help').classList.remove('open'); if (S.filter) setFilter(S.filter); break;
   }
 });
@@ -1028,13 +1152,99 @@ $('#dot').onclick = () => {
 /* =========================================================
    INÍCIO
    ========================================================= */
+/* ---------- login ---------- */
+let authMode = 'login';
+function openAuth(){
+  authMode = siteOwner ? 'login' : 'signup';
+  $('#authTitle').textContent = authMode === 'signup' ? 'criar sua conta' : 'entrar';
+  $('#authSub').textContent = authMode === 'signup' ? 'esse canto ainda não tem dono. a primeira conta criada vira a dona dele.' : 'só a dona ou o dono deste canto consegue postar.';
+  $('#authGo').textContent = authMode === 'signup' ? 'criar e entrar' : 'entrar';
+  $('#authPass').autocomplete = authMode === 'signup' ? 'new-password' : 'current-password';
+  $('#authMsg').textContent = '';
+  $('#auth').classList.add('open');
+  setTimeout(() => $('#authEmail').focus(), 30);
+}
+function closeAuth(){ $('#auth').classList.remove('open'); }
+$('#authCancel').onclick = closeAuth;
+$('#auth').addEventListener('click', e => { if (e.target.id === 'auth') closeAuth(); });
+$('#auth').addEventListener('keydown', e => { if (e.key === 'Escape') closeAuth(); });
+$('#authForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = $('#authEmail').value.trim(), password = $('#authPass').value, msg = $('#authMsg');
+  msg.textContent = 'um segundo…';
+  if (authMode === 'signup'){
+    const { error } = await sb.auth.signUp({ email, password });
+    if (error && !/registered|exists/i.test(error.message)){ msg.textContent = error.message; return; }
+  }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error){ msg.textContent = /invalid/i.test(error.message) ? 'email ou senha errados' : /confirm/i.test(error.message) ? 'confirme o email antes de entrar' : error.message; return; }
+  closeAuth();
+});
+$('#bAuth').onclick = async () => {
+  if (!me){ openAuth(); return; }
+  if (pending) await sync();
+  await sb.auth.signOut();
+  toast('saiu ✦');
+};
+$('#lockBtn').onclick = openAuth;
+
+function applyRole(){
+  document.body.classList.toggle('ro', !isOwner);
+  $('#bAuth').textContent = me ? 'sair' : 'entrar';
+  pTitle.contentEditable = pBio.contentEditable = isOwner ? 'true' : 'false';
+  const locked = !isOwner && (!S.public || !siteOwner);
+  $('#lock').classList.toggle('open', locked);
+  if (!siteOwner){
+    $('#lockTitle').textContent = 'esse canto ainda não tem dono';
+    $('#lockSub').textContent = 'cria sua conta e ele vira seu.';
+    $('#lockBtn').textContent = 'criar conta';
+  } else {
+    $('#lockTitle').textContent = 'esse canto é privado';
+    $('#lockSub').textContent = me ? 'essa conta não é a dona deste canto.' : 'só a dona ou o dono consegue ver.';
+    $('#lockBtn').textContent = 'entrar';
+  }
+  if (!isOwner) toggleLook(false);
+}
+function offerImport(){ // posts antigos que ficaram salvos só neste navegador
+  if (!isOwner || S.items.length) return;
+  const old = readJSON(OLD_KEY);
+  if (!old.items || !old.items.length) return;
+  toast(`tem ${old.items.length} posts salvos só neste navegador`, 'trazer pro feed', () => {
+    S.items = old.items.map(({ x, y, ...i }) => i);
+    if (old.theme) S.theme = { ...DEF_THEME, ...old.theme };
+    boot(); save();
+  });
+}
+let starting = null;
+async function start(){
+  if (starting) return starting;
+  starting = (async () => {
+    ready = false; setStatus('carregando…');
+    try { await loadRemote(); setStatus(''); }
+    catch(e){ setStatus('offline ⚠'); toast('não consegui carregar: ' + (e.message || e), 'tentar de novo', start); }
+    ready = true;
+    applyRole(); boot(); offerImport();
+  })();
+  await starting; starting = null;
+}
+sb.auth.onAuthStateChange((event, session) => {
+  const was = me && me.id;
+  me = session ? session.user : null;
+  if ((me && me.id) !== was) setTimeout(start, 0);
+});
+
 function boot(){
   pTitle.textContent = S.title; pBio.textContent = S.bio;
   $('#barTitle').textContent = S.title; document.title = S.title;
   setOrderLabel(); applyTheme(); renderComp(); renderAll(); applyView();
   if (look.classList.contains('open')) renderLook();
 }
-boot();
+boot(); // desenha com o que tinha em cache enquanto o banco responde
+(async () => {
+  const { data } = await sb.auth.getSession();
+  me = data.session ? data.session.user : null;
+  start();
+})();
 }
 </script>
 </body>
