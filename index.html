@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>meu canto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@400;700&family=Nunito:ital,wght@0,400;0,800;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 /* =========================================================
    MEU CANTO — feed vertical com zoom
@@ -157,6 +159,22 @@ textarea.ed::placeholder{color:var(--muted)}
 #help .box{background:var(--card);border:var(--bw) solid var(--border);border-radius:var(--radius);padding:22px 26px;max-width:480px;width:90%;font-size:14px;line-height:1.9;box-shadow:var(--shadow)}
 #help kbd{background:rgba(127,127,127,.2);border-radius:5px;padding:1px 6px;font-family:inherit;font-size:12px}
 
+/* ---------- barra de formatação ---------- */
+.item .body,.item textarea.ed{color:var(--pc,inherit)}
+.body mark{background:color-mix(in srgb,var(--accent) 35%,transparent);color:inherit;border-radius:3px;padding:0 2px}
+.fmt{display:flex;flex-wrap:wrap;gap:2px;align-items:center;margin:0 0 10px;padding:4px;border:var(--bw) solid var(--border);border-radius:10px;background:var(--bar);font:13px/1.2 ui-sans-serif,system-ui,sans-serif;color:var(--muted);user-select:none}
+#comp .fmt{opacity:.5;transition:opacity .15s}
+#comp:focus-within .fmt,#comp .fmt:hover{opacity:1}
+.fmt button{padding:4px 8px;border-radius:6px;color:var(--text);min-width:28px}
+.fmt button:hover{background:rgba(127,127,127,.18)}
+.fmt .sep{width:1px;height:18px;background:var(--border);margin:0 4px}
+.fmt .lbl{font-size:11px;margin:0 2px 0 4px}
+.fmt select{background:var(--card);color:var(--text);border:var(--bw) solid var(--border);border-radius:6px;padding:3px 4px;font:inherit;max-width:100px}
+.fmt label.cp{position:relative;display:inline-flex;align-items:center;gap:4px;padding:3px 6px;border-radius:6px;cursor:pointer;color:var(--text)}
+.fmt label.cp:hover{background:rgba(127,127,127,.18)}
+.fmt label.cp i{width:14px;height:14px;border-radius:50%;border:1px solid var(--border);display:inline-block;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)}
+.fmt input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+
 /* ---------- login, cadeado, modo leitura ---------- */
 #sync{font-size:12px;color:var(--muted);margin-left:8px;white-space:nowrap}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:45}
@@ -218,6 +236,7 @@ body.party .note{animation:hue 2.5s linear infinite}
       <div id="pStats"></div>
     </section>
     <section id="comp" class="note">
+      <div class="fmt" data-for="comp"></div>
       <textarea id="compTxt" rows="2"></textarea>
       <div id="compQuote"></div>
       <div id="compImg"><img alt=""><button class="x" id="compImgX" title="tirar imagem">✕</button></div>
@@ -259,7 +278,8 @@ body.party .note{animation:hue 2.5s linear infinite}
   <kbd>A</kbd> aparência · <kbd>Enter</kbd> edita o selecionado · <kbd>Del</kbd> apaga<br>
   duplo clique num post → edita · <kbd>Esc</kbd> ou <kbd>ctrl</kbd>+<kbd>Enter</kbd> termina<br>
   <kbd>ctrl</kbd>+<kbd>V</kbd> com imagem → entra no post · arrastar imagem também<br>
-  escrevendo: <code>[[id]]</code> liga posts · <code>#tag</code> separa · <code>**negrito**</code> <code>*itálico*</code> <code>`código`</code>
+  escrevendo: barrinha de formatação (fonte, cor, <b>B</b> <i>I</i> <u>U</u>) · <kbd>ctrl</kbd>+<kbd>B</kbd>/<kbd>I</kbd>/<kbd>U</kbd><br>
+  <code>[[id]]</code> liga posts · <code>#tag</code> separa · <code>**negrito**</code> <code>*itálico*</code> <code>`código`</code>
 </div></div>
 <input type="file" id="file" accept="image/*" hidden>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
@@ -282,9 +302,17 @@ const $ = s => document.querySelector(s);
 const FONTS = {
   sistema: 'ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',
   serifada: 'Charter,"Iowan Old Style",Georgia,"Times New Roman",serif',
+  elegante: '"Playfair Display",Georgia,serif',
+  redonda: 'Nunito,ui-rounded,system-ui,sans-serif',
+  mao: 'Caveat,"Comic Sans MS","Chalkboard SE",cursive',
   mono: 'ui-monospace,"SF Mono",Menlo,Consolas,monospace',
-  'à mão': '"Comic Sans MS","Chalkboard SE","Comic Neue",cursive',
+  maquina: '"Space Mono",ui-monospace,monospace',
+  titulo: '"Bebas Neue",Impact,sans-serif',
 };
+const FONT_LABELS = { sistema:'sistema', serifada:'serifada', elegante:'elegante', redonda:'redonda', mao:'à mão', mono:'mono', maquina:'máquina de escrever', titulo:'TÍTULO' };
+// classes .ff-x (trecho do texto) e .pf-x (post inteiro) pra cada fonte
+document.head.insertAdjacentHTML('beforeend', '<style>' + Object.entries(FONTS).map(([k, v]) =>
+  `.ff-${k}{font-family:${v}}.pf-${k} .body,.pf-${k} textarea.ed,#compTxt.pf-${k}{font-family:${v}}`).join('') + '</style>');
 const PATTERNS = {
   pontos: 'radial-gradient(circle, var(--pat) 1.3px, transparent 1.7px)',
   grade: 'linear-gradient(var(--pat) 1px, transparent 1px), linear-gradient(90deg, var(--pat) 1px, transparent 1px)',
@@ -309,6 +337,7 @@ function readJSON(k){ try { return JSON.parse(localStorage.getItem(k)) || {}; } 
 function writeJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
 function normalize(){
   S.theme = { ...DEF_THEME, ...(S.theme || {}) };
+  if (!FONTS[S.theme.font]) S.theme.font = S.theme.font === 'à mão' ? 'mao' : 'sistema';
   S.view = { y: 0, z: 1, ...(S.view || {}) };
   S.fs = S.fs || 16;
   S.order = S.order || 'new';
@@ -323,7 +352,7 @@ function snapshot(){ return { title: S.title, bio: S.bio, theme: S.theme, fs: S.
 function toRow(it){
   return { id: it.id, type: it.type || 'note', body: it.text || '', image_path: it.image_path || null, quote: it.quote || null,
     sz: it.sz || 'm', k: it.k ?? null, dx: Math.round(it.dx || 0), dy: Math.round(it.dy || 0),
-    w: it.w ? Math.round(it.w) : null, rot: it.rot || 0, created: it.created };
+    w: it.w ? Math.round(it.w) : null, rot: it.rot || 0, created: it.created, style: it.style || {} };
 }
 function fromRow(r){
   const it = { id: r.id, type: r.type, text: r.body || '', sz: r.sz || 'm', created: +r.created };
@@ -331,6 +360,7 @@ function fromRow(r){
   if (r.image_path) it.image_path = r.image_path;
   if (r.quote) it.quote = r.quote;
   if (r.dx) it.dx = r.dx; if (r.dy) it.dy = r.dy; if (r.w) it.w = r.w; if (r.rot) it.rot = r.rot;
+  if (r.style && Object.keys(r.style).length) it.style = r.style;
   return it;
 }
 
@@ -444,13 +474,21 @@ function md(t){
   h = h.replace(/`([^`\n]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
   h = h.replace(/\[\[([\w-]+)\]\]/g, (m, id) => `<a class="ref" data-ref="${id}">#${id}</a>`);
   h = h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  // {#ff0055 texto} = cor · {f:mao texto} = fonte (podem ficar um dentro do outro)
+  for (let i = 0; i < 3; i++){
+    h = h.replace(/\{#([0-9a-fA-F]{3,8}) ([^{}\n]+)\}/g, '<span style="color:#$1">$2</span>');
+    h = h.replace(/\{f:([a-z]+) ([^{}\n]+)\}/g, (m, k, t) => FONTS[k] ? `<span class="ff-${k}">${t}</span>` : t);
+  }
   h = h.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  h = h.replace(/__([^_\n]+)__/g, '<u>$1</u>');
+  h = h.replace(/~~([^~\n]+)~~/g, '<s>$1</s>');
+  h = h.replace(/==([^=\n]+)==/g, '<mark>$1</mark>');
   h = h.replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1<i>$2</i>');
   h = h.replace(TAG_RE, '$1<span class="tag" data-tag="$2">#$2</span>');
   h = h.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[i]}</code>`);
   return h.replace(/\n/g, '<br>');
 }
-function plain(t){ return (t || '').replace(REF_RE, '#$1').replace(/\*\*|`/g, '').replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1$2').replace(/\n+/g, ' · '); }
+function plain(t){ return (t || '').replace(REF_RE, '#$1').replace(/\{(?:#[0-9a-fA-F]{3,8}|f:[a-z]+) ([^{}\n]+)\}/g, '$1').replace(/\{(?:#[0-9a-fA-F]{3,8}|f:[a-z]+) ([^{}\n]+)\}/g, '$1').replace(/\*\*|`|__|~~|==/g, '').replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1$2').replace(/\n+/g, ' · '); }
 
 let toastT;
 function toast(msg, label, fn){
@@ -482,6 +520,7 @@ function build(it){
   el.dataset.id = it.id;
   el.style.setProperty('--k', it.k || 1);
   el.style.setProperty('--rot', (it.rot || 0) + 'deg');
+  applyPostStyle(el, it.style);
   placeEl(el, it);
   const n = backlinks(it.id).length;
   el.innerHTML =
@@ -754,8 +793,10 @@ function post(){
   it.k = defK(it);
   if (comp.image){ it.image = comp.image; it.rot = Math.round((Math.random() * 7 - 3.5) * 10) / 10; }
   if (comp.quote) it.quote = comp.quote;
+  if (comp.style && Object.keys(comp.style).length) it.style = { ...comp.style };
   S.items.push(it);
-  compTxt.value = ''; comp.image = null; comp.quote = null;
+  compTxt.value = ''; comp.image = null; comp.quote = null; comp.style = {};
+  applyPostStyle(compTxt, null, true); fillFmt($('#comp .fmt'), null);
   compTxt.blur(); // pra o espaço voltar a servir pra arrastar
   renderComp(); renderAll(); save();
   toast(`postado #${it.id}`);
@@ -770,8 +811,99 @@ $('#compQuote').addEventListener('click', e => {
   if (e.target.id === 'compQuoteX'){ e.stopPropagation(); comp.quote = null; renderComp(); }
 });
 compTxt.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); post(); }
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); post(); return; }
+  fmtKeys(e, compTxt);
   if (e.key === 'Escape') compTxt.blur();
+});
+
+/* =========================================================
+   FORMATAÇÃO (negrito, cor, fonte...)
+   O texto continua sendo texto: a barrinha só coloca
+   marcações em volta do trecho selecionado.
+   ========================================================= */
+function applyPostStyle(el, st, isTextarea){
+  Object.keys(FONTS).forEach(k => el.classList.remove('pf-' + k));
+  st = st || {};
+  if (st.font && FONTS[st.font]) el.classList.add('pf-' + st.font);
+  if (isTextarea) el.style.color = st.color || '';
+  else if (st.color) el.style.setProperty('--pc', st.color);
+  else el.style.removeProperty('--pc');
+}
+const fontOpts = (sel, first) => `<option value="">${first}</option>` + Object.keys(FONTS).map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${FONT_LABELS[k]}</option>`).join('');
+function fillFmt(bar, st){
+  st = st || {};
+  bar.innerHTML =
+    `<select data-f="font" title="fonte do trecho selecionado">${fontOpts('', 'fonte…')}</select>` +
+    `<button data-f="b" title="negrito (ctrl+B)"><b>B</b></button><button data-f="i" title="itálico (ctrl+I)"><i>I</i></button>` +
+    `<button data-f="u" title="sublinhado (ctrl+U)"><u>U</u></button><button data-f="s" title="riscado"><s>S</s></button>` +
+    `<button data-f="m" title="marca-texto"><mark style="background:color-mix(in srgb,var(--accent) 35%,transparent);color:inherit;padding:0 3px">M</mark></button>` +
+    `<label class="cp" title="cor do trecho selecionado"><i></i>cor<input type="color" data-f="color" value="#ff4f8b"></label>` +
+    `<button data-f="clear" title="tirar formatação do trecho">⌫</button>` +
+    `<span class="sep"></span><span class="lbl">post inteiro:</span>` +
+    `<select data-f="pfont" title="fonte do post inteiro">${fontOpts(st.font || '', 'fonte padrão')}</select>` +
+    `<label class="cp" title="cor da letra do post inteiro"><i style="${st.color ? 'background:' + st.color : ''}"></i>cor<input type="color" data-f="pcolor" value="${st.color || '#ffffff'}"></label>` +
+    (st.font || st.color ? `<button data-f="preset" title="voltar fonte e cor do post ao padrão">↺</button>` : '');
+}
+function fmtTarget(bar){
+  if (bar.dataset.for === 'comp') return { ta: compTxt, getStyle: () => comp.style || (comp.style = {}), apply: st => applyPostStyle(compTxt, st, true) };
+  const id = bar.dataset.for, it = byId(id), el = els.get(id);
+  return { ta: el && el.querySelector('textarea.ed'), getStyle: () => it.style || (it.style = {}), apply: st => { applyPostStyle(el, st); }, id };
+}
+function wrapSel(ta, a, b){
+  let s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+  if (s === e){ // nada selecionado: pega a palavra onde está o cursor
+    while (s > 0 && /\S/.test(v[s - 1])) s--;
+    while (e < v.length && /\S/.test(v[e])) e++;
+  }
+  const sel = v.slice(s, e);
+  let out;
+  if (!sel){ out = a + 'texto' + b; }
+  else out = sel.split('\n').map(l => l.trim() ? a + l + b : l).join('\n');
+  ta.value = v.slice(0, s) + out + v.slice(e);
+  if (!sel) ta.setSelectionRange(s + a.length, s + a.length + 5); else ta.setSelectionRange(s, s + out.length);
+  ta.focus({ preventScroll: true });
+  ta.dispatchEvent(new Event('input'));
+}
+function clearSel(ta){
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  if (s === e) return;
+  let t = ta.value.slice(s, e);
+  for (let i = 0; i < 3; i++) t = t.replace(/\{(?:#[0-9a-fA-F]{3,8}|f:[a-z]+) ([^{}\n]*)\}/g, '$1');
+  t = t.replace(/\*\*|__|~~|==/g, '').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2');
+  ta.value = ta.value.slice(0, s) + t + ta.value.slice(e);
+  ta.setSelectionRange(s, s + t.length); ta.focus({ preventScroll: true });
+  ta.dispatchEvent(new Event('input'));
+}
+const MARKS = { b: ['**', '**'], i: ['*', '*'], u: ['__', '__'], s: ['~~', '~~'], m: ['==', '=='] };
+function fmtKeys(e, ta){
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'b' || k === 'i' || k === 'u'){ e.preventDefault(); wrapSel(ta, ...MARKS[k]); }
+}
+document.addEventListener('mousedown', e => { // botões da barrinha não tiram o foco do texto
+  if (e.target.closest('.fmt button')) e.preventDefault();
+});
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.fmt button[data-f]');
+  if (!btn || !isOwner) return;
+  const t = fmtTarget(btn.closest('.fmt')); if (!t.ta) return;
+  const f = btn.dataset.f;
+  if (MARKS[f]) wrapSel(t.ta, ...MARKS[f]);
+  else if (f === 'clear') clearSel(t.ta);
+  else if (f === 'preset'){ const st = t.getStyle(); delete st.font; delete st.color; t.apply(st); fillFmt(btn.closest('.fmt'), st); t.ta.focus({ preventScroll: true }); }
+});
+document.addEventListener('change', e => {
+  const c = e.target.closest('.fmt [data-f]');
+  if (!c || !isOwner) return;
+  const bar = c.closest('.fmt'), t = fmtTarget(bar); if (!t.ta) return;
+  const f = c.dataset.f, v = c.value;
+  if (f === 'font' && v){ c.value = ''; wrapSel(t.ta, `{f:${v} `, '}'); }
+  else if (f === 'color') wrapSel(t.ta, `{${v} `, '}');
+  else if (f === 'pfont' || f === 'pcolor'){
+    const st = t.getStyle();
+    if (f === 'pfont'){ if (v) st.font = v; else delete st.font; } else st.color = v;
+    t.apply(st); fillFmt(bar, st); t.ta.focus({ preventScroll: true });
+  }
 });
 
 /* =========================================================
@@ -789,12 +921,19 @@ function startEdit(id){
   ta.className = 'ed'; ta.value = it.text || '';
   ta.placeholder = 'escreva…';
   el.querySelector('.body').replaceWith(ta);
+  const bar = document.createElement('div');
+  bar.className = 'fmt'; bar.dataset.for = id; fillFmt(bar, it.style);
+  ta.before(bar);
   grow(ta); ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length);
   ta.addEventListener('input', () => grow(ta));
   ta.addEventListener('keydown', e => {
-    if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))){ e.preventDefault(); ta.blur(); }
+    if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))){ e.preventDefault(); finishEdit(); return; }
+    fmtKeys(e, ta);
   });
-  ta.addEventListener('blur', () => finishEdit());
+  // só termina de editar se o foco saiu do balão (a barrinha não conta)
+  const out = e => { if (e.relatedTarget && el.contains(e.relatedTarget)) return; setTimeout(() => { if (editing === id && !el.contains(document.activeElement)) finishEdit(); }, 0); };
+  ta.addEventListener('blur', out);
+  bar.addEventListener('focusout', out);
 }
 function finishEdit(quiet){
   if (!editing) return;
@@ -970,7 +1109,7 @@ const FIELDS = [
   ['moldura', 'photo', 'color'],
   ['espessura da moldura', 'frame', 'range', 0, 16],
   ['texto'],
-  ['fonte', 'font', 'select', Object.keys(FONTS)],
+  ['fonte', 'font', 'select', Object.keys(FONTS), FONT_LABELS],
   ['cor do texto', 'text', 'color'],
   ['texto secundário', 'muted', 'color'],
   ['destaque (ids, tags)', 'accent', 'color'],
@@ -1003,7 +1142,7 @@ function renderLook(){
     let input;
     if (type === 'color') input = `<input type="color" data-k="${key}" value="${t[key]}">`;
     else if (type === 'range') input = `<input type="range" data-k="${key}" min="${a}" max="${b}" value="${t[key]}">`;
-    else if (type === 'select') input = `<select data-k="${key}">${a.map(o => `<option ${o === t[key] ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+    else if (type === 'select') input = `<select data-k="${key}">${a.map(o => `<option value="${o}" ${o === t[key] ? 'selected' : ''}>${(b && b[o]) || o}</option>`).join('')}</select>`;
     else if (type === 'checkbox') input = `<input type="checkbox" data-k="${key}" ${t[key] ? 'checked' : ''}>`;
     else input = `<input type="text" data-k="${key}" value="${esc(t[key])}">`;
     h += `<div class="fr"><label>${label}</label>${input}</div>`;
@@ -1234,6 +1373,7 @@ sb.auth.onAuthStateChange((event, session) => {
 });
 
 function boot(){
+  fillFmt($('#comp .fmt'), comp.style);
   pTitle.textContent = S.title; pBio.textContent = S.bio;
   $('#barTitle').textContent = S.title; document.title = S.title;
   setOrderLabel(); applyTheme(); renderComp(); renderAll(); applyView();
