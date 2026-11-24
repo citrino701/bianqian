@@ -176,6 +176,21 @@ textarea.ed::placeholder{color:var(--muted)}
 .fmt label.cp i{width:14px;height:14px;border-radius:50%;border:1px solid var(--border);display:inline-block;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)}
 .fmt input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
 
+/* ---------- prévia de links ---------- */
+.lp{display:block;margin-top:10px;border:var(--bw) solid var(--border);border-radius:calc(var(--radius) * .6);overflow:hidden;text-decoration:none;color:inherit;background:rgba(127,127,127,.06);font-size:.86em;line-height:1.35}
+.lp:hover{border-color:var(--accent)}
+.lp .lp-img{display:block;width:100%;max-height:260px;object-fit:cover;background:rgba(127,127,127,.12);pointer-events:none;-webkit-user-drag:none}
+.sz-pp .lp .lp-img{max-height:110px}
+.sz-p .lp .lp-img{max-height:170px}
+.lp-t{padding:9px 12px 10px;display:flex;flex-direction:column;gap:3px}
+.lp-t b{font-weight:650;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lp-t span{color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lp-t small{color:var(--muted);font-size:.85em;display:flex;align-items:center;gap:6px}
+.lp-t small img{width:14px;height:14px;border-radius:3px;pointer-events:none}
+.lp.loading .lp-t b{width:60%;height:.9em;border-radius:4px;background:rgba(127,127,127,.18);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.4}}
+.sz-pp .lp-t span{display:none}
+
 /* ---------- seleção múltipla ---------- */
 #marquee{position:fixed;display:none;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:4px;z-index:14;pointer-events:none}
 body.multi .item.sel .foot{opacity:0;pointer-events:none}
@@ -292,6 +307,7 @@ body.party .note{animation:hue 2.5s linear infinite}
   <kbd>J</kbd>/<kbd>K</kbd> próximo/anterior · <kbd>Home</kbd> topo · <kbd>End</kbd> fim<br>
   imagem sem texto vira foto jogada · com texto fica na caixinha<br>
   arrastar um balão → move ele pra onde quiser<br>
+  <kbd>alt</kbd> + arrastar um post → duplica · link no texto → vira prévia da página<br>
   arrastar no fundo → seleciona vários · <kbd>shift</kbd>+clique soma/tira · <kbd>ctrl</kbd>+<kbd>A</kbd> todos<br>
   cantinho ↘ → arraste pra aumentar/diminuir (pequenos dividem a linha)<br>
   <kbd>alt</kbd> + scroll em cima de um balão → aumenta/diminui só ele<br>
@@ -493,7 +509,7 @@ function md(t){
   const codes = [];
   h = h.replace(/`([^`\n]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
   h = h.replace(/\[\[([\w-]+)\]\]/g, (m, id) => `<a class="ref" data-ref="${id}">#${id}</a>`);
-  h = h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  h = h.replace(/(https?:\/\/[^\s<]+)/g, (m, u) => `<a href="${u}" target="_blank" rel="noopener">${shortUrl(u)}</a>`);
   // {#ff0055 texto} = cor · {f:mao texto} = fonte (podem ficar um dentro do outro)
   for (let i = 0; i < 3; i++){
     h = h.replace(/\{#([0-9a-fA-F]{3,8}) ([^{}\n]+)\}/g, '<span style="color:#$1">$2</span>');
@@ -508,6 +524,8 @@ function md(t){
   h = h.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[i]}</code>`);
   return h.replace(/\n/g, '<br>');
 }
+function shortUrl(u){ const v = u.replace(/^https?:\/\/(www\.)?/, ''); return v.length > 38 ? v.slice(0, 36) + '…' : v; }
+function firstUrl(t){ const m = (t || '').replace(/`[^`]*`/g, '').match(/https?:\/\/[^\s<>"'`]+/); return m ? m[0].replace(/[).,!?;:]+$/, '') : null; }
 function plain(t){ return (t || '').replace(REF_RE, '#$1').replace(/\{(?:#[0-9a-fA-F]{3,8}|f:[a-z]+) ([^{}\n]+)\}/g, '$1').replace(/\{(?:#[0-9a-fA-F]{3,8}|f:[a-z]+) ([^{}\n]+)\}/g, '$1').replace(/\*\*|`|__|~~|==/g, '').replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1$2').replace(/\n+/g, ' · '); }
 
 let toastT;
@@ -547,12 +565,14 @@ function build(it){
     `<div class="head"><span class="id">#${it.id}</span><span>${hour(it.created)}</span>${it.type === 'text' ? '<span>· texto solto</span>' : ''}</div>` +
     `<div class="body">${it.text ? md(it.text) : '<span class="empty">vazio · clique duas vezes</span>'}</div>` +
     (it.image ? `<img class="img" src="${it.image}" alt="">` : '') +
+    (firstUrl(it.text) ? previewSlot(firstUrl(it.text)) : '') +
     (it.quote ? quoteHtml(it.quote) : '') +
     `<div class="foot"><button data-a="edit">editar</button><button data-a="cite">citar</button><button data-a="link">ligar</button>` +
     `<button data-a="szdown" title="balão menor">menor</button><button data-a="szup" title="balão maior">maior</button>` +
     `<button data-a="img">${it.image ? 'trocar imagem' : 'imagem'}</button>${it.image ? '<button data-a="noimg">tirar imagem</button>' : ''}` +
     `<button data-a="del">apagar</button>${moved(it) ? '<button data-a="reset" title="volta posição, tamanho e fonte ao normal">↺ no lugar</button>' : ''}${n ? `<button class="bl" data-a="backs" title="quem cita ou liga nesse">↩ ${n}</button>` : ''}</div><div class="rz" title="arraste pra aumentar ou diminuir"></div>`;
   els.set(it.id, el);
+  const lp = el.querySelector('.lp'); if (lp) fillPreview(lp);
   return el;
 }
 const SIZES = ['pp', 'p', 'm', 'g', 'gg'];
@@ -569,6 +589,36 @@ function placeEl(el, it){
   el.style.width = it.w ? it.w + 'px' : '';
   el.classList.toggle('sized', !!it.w);
 }
+/* prévia de links: pergunta pra /api/preview (função na Vercel) e guarda por 7 dias */
+const LP = new Map(), LP_DAYS = 7;
+function previewSlot(url){
+  let host = url; try { host = new URL(url).hostname.replace(/^www\./, ''); } catch(e){}
+  return `<a class="lp loading" href="${esc(url)}" target="_blank" rel="noopener" data-url="${esc(url)}"><div class="lp-t"><b></b><small>${esc(host)}</small></div></a>`;
+}
+function getPreview(url){
+  if (LP.has(url)) return LP.get(url);
+  const k = 'lp:' + url, c = readJSON(k);
+  if (c.t && Date.now() - c.t < LP_DAYS * 864e5) { const p = Promise.resolve(c.d); LP.set(url, p); return p; }
+  const p = fetch('/api/preview?url=' + encodeURIComponent(url))
+    .then(r => r.ok ? r.json() : null).catch(() => null)
+    .then(d => { if (d && (d.title || d.image)) writeJSON(k, { t: Date.now(), d }); return d; });
+  LP.set(url, p);
+  return p;
+}
+function fillPreview(a){
+  getPreview(a.dataset.url).then(d => {
+    a.classList.remove('loading');
+    const host = a.querySelector('small') ? a.querySelector('small').textContent : '';
+    if (!d || (!d.title && !d.image)){ a.innerHTML = `<div class="lp-t"><small>🔗 ${esc(host)}</small></div>`; drawLinksSoon(); return; }
+    a.innerHTML =
+      (d.image ? `<img class="lp-img" src="${esc(d.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '') +
+      `<div class="lp-t">${d.title ? `<b>${esc(d.title)}</b>` : ''}${d.description ? `<span>${esc(d.description)}</span>` : ''}` +
+      `<small>${d.favicon ? `<img src="${esc(d.favicon)}" alt="" referrerpolicy="no-referrer">` : ''}${esc(d.site || host)}</small></div>`;
+    a.querySelectorAll('img').forEach(im => im.addEventListener('error', () => im.remove()));
+    drawLinksSoon();
+  });
+}
+
 function visibleItems(){
   return S.items
     .filter(it => !S.filter || tags(it.text).includes(S.filter))
@@ -783,6 +833,15 @@ vp.addEventListener('pointerdown', e => {
   const id = itemEl.dataset.id, it = byId(id);
   if (e.shiftKey || e.ctrlKey || e.metaKey){ e.preventDefault(); toggleSel(id); return; }
   if (!selSet.has(id)) select(id);
+  if (e.altKey && !e.target.closest('.rz')){ // alt + arrastar = duplica e arrasta a cópia
+    e.preventDefault();
+    const made = duplicate(selSet.size > 1 ? selected() : [id]);
+    selSet = new Set(made); S.sel = made[made.length - 1]; paintSel();
+    drag = { type: 'move', id: S.sel, ids: made, dup: true, orig: new Map(made.map(g => { const x = byId(g); return [g, { dx: x.dx || 0, dy: x.dy || 0 }]; })), sx: e.clientX, sy: e.clientY, oview: S.view.y, moved: false };
+    made.forEach(g => { const x = els.get(g); if (x) x.classList.add('dragging'); });
+    vp.classList.add('moving');
+    return;
+  }
   if (e.target.closest('.rz')){
     e.preventDefault();
     drag = { type: 'size', id, sx: e.clientX, sy: e.clientY, ov: SZV[it.sz || 'm'], col: world.clientWidth };
@@ -851,12 +910,33 @@ window.addEventListener('pointerup', () => {
   vp.classList.remove('panning', 'moving', 'sizing');
   marquee.style.display = 'none';
   if (d.type === 'box') return;
+  if (d.dup) toast(d.ids.length > 1 ? `${d.ids.length} posts duplicados` : `duplicado #${d.ids[0]}`, 'desfazer', () => { S.items = S.items.filter(i => !d.ids.includes(i.id)); select(null); renderAll(); save(); });
   (d.ids || (d.id ? [d.id] : [])).forEach(g => {
     const el = els.get(g); if (el) el.classList.remove('dragging');
     if (d.moved || d.type === 'size') rebuildFoot(g);
   });
   save();
 });
+function duplicate(ids){
+  const pairs = [];
+  ids.forEach((sid, n) => {
+    const o = byId(sid); if (!o) return;
+    const { _up, ...rest } = o;
+    const c = JSON.parse(JSON.stringify(rest));
+    c.id = uid(); c.created = o.created + 1 + n; // fica logo depois do original no feed
+    if (o.image && o.image.startsWith('data:')) c.image = o.image;
+    S.items.push(c); pairs.push([o, c]);
+  });
+  renderAll();
+  for (const [o, c] of pairs){ // a cópia nasce exatamente em cima do original
+    const oe = els.get(o.id), ce = els.get(c.id); if (!oe || !ce) continue;
+    c.dx = Math.round(oe.offsetLeft + (o.dx || 0) - ce.offsetLeft);
+    c.dy = Math.round(oe.offsetTop + (o.dy || 0) - ce.offsetTop);
+    placeEl(ce, c);
+  }
+  drawLinksSoon();
+  return pairs.map(([, c]) => c.id);
+}
 function rebuildFoot(id){ // mostra/esconde o botão "no lugar" sem recriar o balão
   const it = byId(id), el = els.get(id); if (!it || !el) return;
   const foot = el.querySelector('.foot'); if (!foot) return;
