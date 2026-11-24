@@ -45,7 +45,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 #world{position:absolute;left:0;top:0;width:var(--col);transform-origin:0 0;padding-bottom:160px}
 #world.anim{transition:transform .45s cubic-bezier(.2,.8,.2,1)}
 #links{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
-#links path{fill:none;stroke:var(--link);stroke-width:1.6;opacity:.6}
+#links path{fill:none;stroke:var(--link);stroke-width:1.6;opacity:.65}
+#links marker path{opacity:1}
 #links path.q{stroke-dasharray:6 5}
 #links circle{fill:var(--link);opacity:.8}
 
@@ -589,6 +590,18 @@ function updateBacks(){
 }
 
 /* linhas de ligação: arcos na margem esquerda do feed */
+/* ligações: cada uma sai pelo caminho mais curto
+   - lado a lado → liga um no outro direto
+   - um em cima do outro, sem nada no meio → liga por baixo/cima
+   - com coisa no meio → faz a curva pela margem (esquerda ou direita) mais perto */
+function rectOf(el){
+  const it = byId(el.dataset.id) || {};
+  const l = el.offsetLeft + (it.dx || 0), t = el.offsetTop + (it.dy || 0);
+  return { l, t, r: l + el.offsetWidth, b: t + el.offsetHeight, w: el.offsetWidth, h: el.offsetHeight, cx: l + el.offsetWidth / 2, cy: t + el.offsetHeight / 2 };
+}
+function curve(p, np, q, nq, d){
+  return `M${p.x},${p.y} C${p.x + np[0] * d},${p.y + np[1] * d} ${q.x + nq[0] * d},${q.y + nq[1] * d} ${q.x},${q.y}`;
+}
 function drawLinks(){
   const out = [];
   for (const it of S.items){
@@ -596,14 +609,53 @@ function drawLinks(){
     if (it.quote){ out.push([it.id, it.quote, 'q']); seen.add(it.quote); }
     refs(it.text).forEach(t => { if (!seen.has(t)){ seen.add(t); out.push([it.id, t, '']); } });
   }
-  const pos = el => { const it = byId(el.dataset.id) || {}; return { x: el.offsetLeft + (it.dx || 0) - 12, y: el.offsetTop + (it.dy || 0) + Math.min(28, el.offsetHeight / 2) }; };
-  linksSvg.innerHTML = out.map(([a, b, c]) => {
-    const A = els.get(a), B = els.get(b);
+  const rects = new Map([...els].map(([id, el]) => [id, rectOf(el)]));
+  const W = world.clientWidth, side = { l: 0, r: 0 };
+  const anchorY = R => R.t + Math.min(R.h / 2, 34);
+  const blocked = (A, B, x1, x2) => { // tem algum post no caminho entre A e B?
+    const top = Math.min(A.b, B.b), bot = Math.max(A.t, B.t);
+    for (const R of rects.values()){
+      if (R === A || R === B) continue;
+      if (R.r > x1 && R.l < x2 && R.b > top && R.t < bot) return true;
+    }
+    return false;
+  };
+  const yOverlap = (A, B) => A.t < B.b && B.t < A.b;
+  const paths = out.map(([a, b, c]) => {
+    const A = rects.get(a), B = rects.get(b);
     if (!A || !B || A === B) return '';
-    const p = pos(A), q = pos(B);
-    const d = Math.min(220, 26 + Math.abs(q.y - p.y) * 0.22);
-    return `<path class="${c}" d="M${p.x},${p.y} C${Math.min(p.x, q.x) - d},${p.y} ${Math.min(p.x, q.x) - d},${q.y} ${q.x},${q.y}"/><circle cx="${p.x}" cy="${p.y}" r="3"/><circle cx="${q.x}" cy="${q.y}" r="3"/>`;
+    let p, q, np, nq, d;
+    if (yOverlap(A, B) && (B.l >= A.r - 4 || A.l >= B.r - 4)){ // lado a lado
+      const right = B.l >= A.r - 4;
+      p = { x: right ? A.r : A.l, y: anchorY(A) }; np = [right ? 1 : -1, 0];
+      q = { x: right ? B.l : B.r, y: anchorY(B) }; nq = [right ? -1 : 1, 0];
+      d = Math.max(18, Math.abs(q.x - p.x) * 0.45);
+    } else {
+      const down = B.t >= A.b, gapOk = down ? B.t >= A.b : A.t >= B.b;
+      const xo1 = Math.max(A.l, B.l), xo2 = Math.min(A.r, B.r);
+      // caminho direto: pelo pedaço em comum, ou na diagonal entre os centros
+      const ax = xo2 > xo1 ? (xo1 + xo2) / 2 : A.cx, bx = xo2 > xo1 ? (xo1 + xo2) / 2 : B.cx;
+      if (gapOk && !blocked(A, B, Math.min(ax, bx) - 6, Math.max(ax, bx) + 6)){ // um em cima do outro, nada no meio
+        p = { x: ax, y: down ? A.b : A.t }; np = [0, down ? 1 : -1];
+        q = { x: bx, y: down ? B.t : B.b }; nq = [0, down ? -1 : 1];
+        d = Math.max(8, Math.abs(q.y - p.y) * 0.5);
+      } else { // pela margem mais perto
+        const avg = (A.cx + B.cx) / 2 - W / 2;
+        const goRight = Math.abs(avg) > 40 ? avg > 0 : side.r < side.l;
+        side[goRight ? 'r' : 'l']++;
+        p = { x: goRight ? A.r : A.l, y: anchorY(A) }; np = [goRight ? 1 : -1, 0];
+        q = { x: goRight ? B.r : B.l, y: anchorY(B) }; nq = np;
+        const edge = goRight ? Math.max(A.r, B.r) : Math.min(A.l, B.l);
+        d = Math.min(240, 26 + Math.abs(q.y - p.y) * 0.22) + Math.abs(edge - p.x) * 0.6;
+        // as duas pontas saem até a mesma margem antes de curvar
+        p = { ...p }; q = { ...q };
+        const dp = d + Math.abs(edge - p.x), dq = d + Math.abs(edge - q.x);
+        return `<path class="${c}" marker-end="url(#seta)" d="M${p.x},${p.y} C${p.x + np[0] * dp},${p.y} ${q.x + nq[0] * dq},${q.y} ${q.x},${q.y}"/><circle cx="${p.x}" cy="${p.y}" r="3"/>`;
+      }
+    }
+    return `<path class="${c}" marker-end="url(#seta)" d="${curve(p, np, q, nq, d)}"/><circle cx="${p.x}" cy="${p.y}" r="3"/>`;
   }).join('');
+  linksSvg.innerHTML = `<defs><marker id="seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" style="fill:var(--link);stroke:none"/></marker></defs>` + paths;
 }
 let linksRaf;
 function drawLinksSoon(){ cancelAnimationFrame(linksRaf); linksRaf = requestAnimationFrame(drawLinks); }
