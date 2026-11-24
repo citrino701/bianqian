@@ -176,6 +176,23 @@ textarea.ed::placeholder{color:var(--muted)}
 .fmt label.cp i{width:14px;height:14px;border-radius:50%;border:1px solid var(--border);display:inline-block;background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)}
 .fmt input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
 
+/* ---------- seleção múltipla ---------- */
+#marquee{position:fixed;display:none;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:4px;z-index:14;pointer-events:none}
+body.multi .item.sel .foot{opacity:0;pointer-events:none}
+body.multi .item.sel{outline:2px solid var(--accent);outline-offset:3px;border-radius:var(--radius)}
+#bulk{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:none;align-items:center;gap:2px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);background:var(--bar);border:var(--bw) solid var(--border);border-radius:14px;padding:6px 8px;box-shadow:0 12px 34px rgba(0,0,0,.35);z-index:30;font:13px/1.2 ui-sans-serif,system-ui,sans-serif;color:var(--text)}
+#bulk.open{display:flex}
+#bulk b{color:var(--accent);margin:0 8px 0 4px}
+#bulk button{padding:6px 9px;border-radius:8px;color:var(--text)}
+#bulk button:hover{background:rgba(127,127,127,.18)}
+#bulk button.danger{color:#ff6b6b}
+#bulk .sep{width:1px;height:18px;background:var(--border);margin:0 4px}
+#bulk select{background:var(--card);color:var(--text);border:var(--bw) solid var(--border);border-radius:6px;padding:4px;font:inherit;max-width:110px}
+#bulk label.cp{position:relative;display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border-radius:8px;cursor:pointer}
+#bulk label.cp:hover{background:rgba(127,127,127,.18)}
+#bulk label.cp i{width:14px;height:14px;border-radius:50%;border:1px solid var(--border);background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)}
+#bulk input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer}
+
 /* ---------- login, cadeado, modo leitura ---------- */
 #sync{font-size:12px;color:var(--muted);margin-left:8px;white-space:nowrap}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:45}
@@ -264,16 +281,18 @@ body.party .note{animation:hue 2.5s linear infinite}
   <div class="arow"><button type="button" class="btn" id="authCancel">cancelar</button><span class="sp"></span><button type="submit" class="post" id="authGo">entrar</button></div>
   <p class="sub" id="authMsg"></p>
 </form></div>
+<div id="bulk"></div>
 <div id="pfoot"></div>
 <div id="toast"></div>
 <div id="help"><div class="box">
   <b>atalhos</b><br>
   <kbd>N</kbd> escrever post · <kbd>T</kbd> texto solto (sem caixinha)<br>
-  scroll ou <kbd>espaço</kbd> + arrastar → sobe e desce<br>
+  scroll, <kbd>espaço</kbd> + arrastar ou botão do meio → sobe e desce<br>
   <kbd>ctrl</kbd> + scroll → zoom · <kbd>ctrl</kbd> <kbd>+</kbd>/<kbd>−</kbd>/<kbd>0</kbd> também<br>
   <kbd>J</kbd>/<kbd>K</kbd> próximo/anterior · <kbd>Home</kbd> topo · <kbd>End</kbd> fim<br>
   imagem sem texto vira foto jogada · com texto fica na caixinha<br>
   arrastar um balão → move ele pra onde quiser<br>
+  arrastar no fundo → seleciona vários · <kbd>shift</kbd>+clique soma/tira · <kbd>ctrl</kbd>+<kbd>A</kbd> todos<br>
   cantinho ↘ → arraste pra aumentar/diminuir (pequenos dividem a linha)<br>
   <kbd>alt</kbd> + scroll em cima de um balão → aumenta/diminui só ele<br>
   <kbd>A</kbd> aparência · <kbd>Enter</kbd> edita o selecionado · <kbd>Del</kbd> apaga<br>
@@ -517,7 +536,7 @@ function backlinks(id){ return S.items.filter(i => i.id !== id && (i.quote === i
 
 function build(it){
   const el = document.createElement('article');
-  el.className = 'item ' + (it.type === 'text' ? 'text' : 'note') + ' sz-' + (it.sz || 'm') + (isLoose(it) ? ' loose' : '') + (S.sel === it.id ? ' sel' : '') + (it.w ? ' sized' : '');
+  el.className = 'item ' + (it.type === 'text' ? 'text' : 'note') + ' sz-' + (it.sz || 'm') + (isLoose(it) ? ' loose' : '') + (selSet.has(it.id) ? ' sel' : '') + (it.w ? ' sized' : '');
   el.dataset.id = it.id;
   el.style.setProperty('--k', it.k || 1);
   el.style.setProperty('--rot', (it.rot || 0) + 'deg');
@@ -661,7 +680,16 @@ let linksRaf;
 function drawLinksSoon(){ cancelAnimationFrame(linksRaf); linksRaf = requestAnimationFrame(drawLinks); }
 world.addEventListener('load', drawLinksSoon, true);
 
-function select(id){ S.sel = id; els.forEach((el, k) => el.classList.toggle('sel', k === id)); }
+/* seleção: um ou vários posts */
+let selSet = new Set();
+function paintSel(){
+  els.forEach((el, k) => el.classList.toggle('sel', selSet.has(k)));
+  document.body.classList.toggle('multi', selSet.size > 1);
+  renderBulk();
+}
+function select(id){ selSet = id ? new Set([id]) : new Set(); S.sel = id; paintSel(); }
+function toggleSel(id){ if (selSet.has(id)) selSet.delete(id); else selSet.add(id); S.sel = selSet.size ? [...selSet].pop() : null; paintSel(); }
+function selected(){ return [...selSet].filter(id => byId(id)); }
 
 /* =========================================================
    VISTA: sempre vertical, coluna centralizada, com zoom
@@ -718,10 +746,11 @@ vp.addEventListener('wheel', e => {
   e.preventDefault();
   const m = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? vp.clientHeight : 1;
   const over = e.target.closest && e.target.closest('.item');
-  if (e.altKey && over && isOwner){ // alt + scroll em cima de um balão: muda o tamanho só dele
-    const it = byId(over.dataset.id);
-    it.k = clamp(Math.round((it.k || 1) * Math.exp(-e.deltaY * m * 0.0015) * 100) / 100, 0.4, 5);
-    over.style.setProperty('--k', it.k); drawLinksSoon(); save(); return;
+  if (e.altKey && over && isOwner){ // alt + scroll em cima de um balão: muda o tamanho dele (ou de todos os selecionados)
+    const f = Math.exp(-e.deltaY * m * 0.0015);
+    const ids = selSet.has(over.dataset.id) && selSet.size > 1 ? selected() : [over.dataset.id];
+    ids.forEach(g => { const it = byId(g); it.k = clamp(Math.round((it.k || 1) * f * 100) / 100, 0.4, 5); const el = els.get(g); if (el) el.style.setProperty('--k', it.k); });
+    drawLinksSoon(); save(); return;
   }
   if (e.ctrlKey || e.metaKey) zoomAt(e.clientY, S.view.z * Math.exp(-e.deltaY * m * 0.0018));
   else scrollBy(e.deltaY * m + (e.shiftKey ? 0 : 0));
@@ -739,19 +768,29 @@ vp.addEventListener('pointerdown', e => {
   const itemEl = e.target.closest('.item');
   if (itemEl && linkFrom){ e.preventDefault(); finishLink(itemEl.dataset.id); return; }
   const interactive = e.target.closest('textarea, button, a, [contenteditable], .quote, .tag, .ref');
-  if (!itemEl && !e.target.closest('#comp, #prof')){ if (linkFrom) cancelLink(); select(null); startPan(e); return; }
+  if (!itemEl && !e.target.closest('#comp, #prof')){
+    if (linkFrom) cancelLink();
+    if (!isOwner || e.pointerType === 'touch'){ select(null); startPan(e); return; }
+    // arrastar no fundo = caixinha de seleção
+    e.preventDefault();
+    drag = { type: 'box', sx: e.clientX, sy: e.clientY, add: e.shiftKey || e.ctrlKey || e.metaKey, base: new Set(selSet) };
+    if (!drag.add) select(null);
+    return;
+  }
   if (!itemEl || interactive) return;
   if (!isOwner){ startPan(e); return; } // visitante: arrastar só rola
   if (e.pointerType === 'touch'){ startPan(e); return; }
   const id = itemEl.dataset.id, it = byId(id);
-  select(id);
+  if (e.shiftKey || e.ctrlKey || e.metaKey){ e.preventDefault(); toggleSel(id); return; }
+  if (!selSet.has(id)) select(id);
   if (e.target.closest('.rz')){
     e.preventDefault();
     drag = { type: 'size', id, sx: e.clientX, sy: e.clientY, ov: SZV[it.sz || 'm'], col: world.clientWidth };
     vp.classList.add('sizing');
     return;
   }
-  drag = { type: 'move', id, sx: e.clientX, sy: e.clientY, ox: it.dx || 0, oy: it.dy || 0, oview: S.view.y, moved: false };
+  const group = selSet.size > 1 ? selected() : [id]; // arrasta todos os selecionados juntos
+  drag = { type: 'move', id, ids: group, orig: new Map(group.map(g => { const x = byId(g); return [g, { dx: x.dx || 0, dy: x.dy || 0 }]; })), sx: e.clientX, sy: e.clientY, oview: S.view.y, moved: false };
 });
 let edgeRaf = null, lastPt = null;
 function edgeScroll(){ // arrastando perto da borda, o feed rola junto
@@ -764,16 +803,31 @@ function edgeScroll(){ // arrastando perto da borda, o feed rola junto
   if (v){ S.view.y += v; applyView(); moveTo(lastPt); edgeRaf = requestAnimationFrame(edgeScroll); }
 }
 function moveTo(pt){
-  const it = byId(drag.id), el = els.get(drag.id);
-  if (!it || !el) return;
   const z = S.view.z;
-  it.dx = Math.round(drag.ox + (pt.x - drag.sx) / z);
-  it.dy = Math.round(drag.oy + (pt.y - drag.sy - (S.view.y - drag.oview)) / z);
-  placeEl(el, it); drawLinksSoon();
+  const ddx = (pt.x - drag.sx) / z, ddy = (pt.y - drag.sy - (S.view.y - drag.oview)) / z;
+  for (const g of drag.ids){
+    const it = byId(g), el = els.get(g), o = drag.orig.get(g);
+    if (!it || !el) continue;
+    it.dx = Math.round(o.dx + ddx); it.dy = Math.round(o.dy + ddy);
+    placeEl(el, it);
+  }
+  drawLinksSoon();
+}
+const marquee = document.createElement('div');
+marquee.id = 'marquee'; document.body.appendChild(marquee);
+function boxSelect(e){
+  const x1 = Math.min(drag.sx, e.clientX), x2 = Math.max(drag.sx, e.clientX), y1 = Math.min(drag.sy, e.clientY), y2 = Math.max(drag.sy, e.clientY);
+  if (!drag.moved && x2 - x1 < 4 && y2 - y1 < 4) return;
+  drag.moved = true;
+  Object.assign(marquee.style, { display: 'block', left: x1 + 'px', top: y1 + 'px', width: x2 - x1 + 'px', height: y2 - y1 + 'px' });
+  const next = new Set(drag.base && drag.add ? drag.base : []);
+  els.forEach((el, id) => { const b = el.getBoundingClientRect(); if (b.right > x1 && b.left < x2 && b.bottom > y1 && b.top < y2) next.add(id); });
+  selSet = next; S.sel = next.size ? [...next].pop() : null; paintSel();
 }
 window.addEventListener('pointermove', e => {
   if (!drag) return;
   if (drag.type === 'pan'){ S.view.y = drag.oy + (e.clientY - drag.sy); applyView(); return; }
+  if (drag.type === 'box'){ boxSelect(e); return; }
   const it = byId(drag.id), el = els.get(drag.id);
   if (!it || !el) return;
   if (drag.type === 'size'){
@@ -786,7 +840,7 @@ window.addEventListener('pointermove', e => {
     return;
   }
   if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
-  if (!drag.moved){ drag.moved = true; el.classList.add('dragging'); vp.classList.add('moving'); if (editing === drag.id) finishEdit(); }
+  if (!drag.moved){ drag.moved = true; drag.ids.forEach(g => { const x = els.get(g); if (x) x.classList.add('dragging'); }); vp.classList.add('moving'); if (editing && drag.ids.includes(editing)) finishEdit(); }
   lastPt = { x: e.clientX, y: e.clientY };
   moveTo(lastPt);
   if (!edgeRaf) edgeRaf = requestAnimationFrame(edgeScroll);
@@ -795,10 +849,12 @@ window.addEventListener('pointerup', () => {
   if (!drag) return;
   const d = drag; drag = null; lastPt = null;
   vp.classList.remove('panning', 'moving', 'sizing');
-  if (d.id){
-    const el = els.get(d.id); if (el) el.classList.remove('dragging');
-    if (d.moved || d.type === 'size') rebuildFoot(d.id);
-  }
+  marquee.style.display = 'none';
+  if (d.type === 'box') return;
+  (d.ids || (d.id ? [d.id] : [])).forEach(g => {
+    const el = els.get(g); if (el) el.classList.remove('dragging');
+    if (d.moved || d.type === 'size') rebuildFoot(g);
+  });
   save();
 });
 function rebuildFoot(id){ // mostra/esconde o botão "no lugar" sem recriar o balão
@@ -866,6 +922,64 @@ compTxt.addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); post(); return; }
   fmtKeys(e, compTxt);
   if (e.key === 'Escape') compTxt.blur();
+});
+
+/* =========================================================
+   AÇÕES EM GRUPO (vários posts selecionados)
+   ========================================================= */
+const bulkEl = $('#bulk');
+function renderBulk(){
+  const n = isOwner ? selected().length : 0;
+  bulkEl.classList.toggle('open', n > 1);
+  if (n < 2) return;
+  if (bulkEl.dataset.n == n) return; // já está desenhada
+  bulkEl.dataset.n = n;
+  bulkEl.innerHTML =
+    `<b>${n} selecionados</b>` +
+    `<button data-b="smaller" title="balões menores">menor</button><button data-b="bigger" title="balões maiores">maior</button>` +
+    `<span class="sep"></span><button data-b="fdown" title="letra menor">A−</button><button data-b="fup" title="letra maior">A+</button>` +
+    `<select data-b="font" title="fonte dos posts">${fontOpts('', 'fonte…')}<option value="__none">fonte padrão</option></select>` +
+    `<label class="cp" title="cor da letra"><i></i>cor<input type="color" data-b="color" value="#ffffff"></label>` +
+    `<span class="sep"></span><button data-b="reset" title="volta posição e tamanho ao normal">↺ no lugar</button>` +
+    `<button data-b="del" class="danger" title="apagar todos (Del)">apagar</button>` +
+    `<button data-b="none" title="tirar seleção (Esc)">✕</button>`;
+}
+function bulk(action, value){
+  if (!isOwner) return;
+  const ids = selected();
+  if (!ids.length) return;
+  if (action === 'none'){ select(null); return; }
+  if (action === 'del'){
+    const gone = ids.map(id => byId(id));
+    S.items = S.items.filter(i => !selSet.has(i.id));
+    select(null); renderAll(); save();
+    toast(`${gone.length > 1 ? gone.length + ' posts apagados' : '#' + gone[0].id + ' apagado'}`, 'desfazer', () => { S.items.push(...gone); renderAll(); save(); });
+    return;
+  }
+  for (const id of ids){
+    const it = byId(id);
+    if (action === 'smaller' || action === 'bigger'){
+      const i = clamp(SIZES.indexOf(it.sz || 'm') + (action === 'bigger' ? 1 : -1), 0, SIZES.length - 1);
+      it.sz = SIZES[i]; delete it.w; it.k = defK(it);
+    } else if (action === 'fup' || action === 'fdown'){
+      it.k = clamp(Math.round((it.k || defK(it)) * (action === 'fup' ? 1.1 : 1 / 1.1) * 100) / 100, 0.4, 5);
+    } else if (action === 'font'){
+      it.style = { ...(it.style || {}) };
+      if (value === '__none') delete it.style.font; else it.style.font = value;
+    } else if (action === 'color'){
+      it.style = { ...(it.style || {}), color: value };
+    } else if (action === 'reset'){
+      delete it.dx; delete it.dy; delete it.w; it.k = defK(it);
+    }
+    rebuild(id);
+  }
+  paintSel(); drawLinksSoon(); save();
+}
+bulkEl.addEventListener('click', e => { const b = e.target.closest('button[data-b]'); if (b) bulk(b.dataset.b); });
+bulkEl.addEventListener('change', e => {
+  const c = e.target.closest('[data-b]'); if (!c) return;
+  if (c.dataset.b === 'font' && c.value){ bulk('font', c.value); c.value = ''; }
+  if (c.dataset.b === 'color') bulk('color', c.value);
 });
 
 /* =========================================================
@@ -1005,7 +1119,7 @@ function removeItem(id, silent){
   if (idx < 0) return;
   const gone = S.items[idx];
   S.items.splice(idx, 1);
-  if (S.sel === id) S.sel = null;
+  selSet.delete(id); if (S.sel === id) S.sel = null;
   if (editing === id) editing = null;
   renderAll(); save();
   if (!silent) toast(`#${id} apagado`, 'desfazer', () => { S.items.push(gone); renderAll(); save(); flyTo(gone.id); });
@@ -1278,6 +1392,7 @@ window.addEventListener('keydown', e => {
   if (mod && (e.key === '=' || e.key === '+')){ e.preventDefault(); zoomCenter(1.25); return; }
   if (mod && e.key === '-'){ e.preventDefault(); zoomCenter(1 / 1.25); return; }
   if (mod && e.key === '0'){ e.preventDefault(); setZoom(1); return; }
+  if (mod && e.key.toLowerCase() === 'a' && isOwner){ e.preventDefault(); selSet = new Set(els.keys()); paintSel(); toast(`${selSet.size} selecionados`); return; }
   if (mod || e.altKey) return;
   switch (e.key.toLowerCase()){
     case 'n': e.preventDefault(); focusComp('note'); break;
@@ -1292,8 +1407,8 @@ window.addEventListener('keydown', e => {
     case 'home': toTop(); break;
     case 'end': toEnd(); break;
     case '?': $('#help').classList.toggle('open'); break;
-    case 'enter': if (S.sel && isOwner){ e.preventDefault(); startEdit(S.sel); } break;
-    case 'delete': case 'backspace': if (S.sel && isOwner) removeItem(S.sel); break;
+    case 'enter': if (S.sel && isOwner && selSet.size === 1){ e.preventDefault(); startEdit(S.sel); } break;
+    case 'delete': case 'backspace': if (selSet.size && isOwner) bulk('del'); break;
     case 'escape': cancelLink(); select(null); $('#help').classList.remove('open'); if (S.filter) setFilter(S.filter); break;
   }
 });
