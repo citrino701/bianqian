@@ -91,6 +91,14 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 #vp.sizing,#vp.sizing *{cursor:nwse-resize!important}
 .rz{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;opacity:0;transition:opacity .15s}
 .item:hover .rz,.item.sel .rz{opacity:.75}
+.rzr,.rzb{position:absolute;z-index:2}
+.rzr{top:12px;bottom:18px;right:-4px;width:9px;cursor:ew-resize}
+.rzb{left:12px;right:18px;bottom:-4px;height:9px;cursor:ns-resize}
+.rzr::after,.rzb::after{content:"";position:absolute;background:var(--accent);border-radius:3px;opacity:0;transition:opacity .15s}
+.rzr::after{right:3px;top:50%;width:3px;height:26px;margin-top:-13px}
+.rzb::after{bottom:3px;left:50%;height:3px;width:26px;margin-left:-13px}
+.item:hover .rzr::after,.item:hover .rzb::after{opacity:.55}
+body.ro .rzr,body.ro .rzb{display:none}
 .rz::after{content:"";position:absolute;right:5px;bottom:5px;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted)}
 .note.sel{outline:2px solid var(--accent);outline-offset:3px}
 .text{padding:6px 6px 2px;border-radius:8px;outline:1px dashed transparent}
@@ -310,7 +318,8 @@ body.party .note{animation:hue 2.5s linear infinite}
   arrastar um balão → move ele pra onde quiser<br>
   <kbd>alt</kbd> + arrastar um post → duplica · link no texto → vira prévia da página<br>
   arrastar no fundo → seleciona vários · <kbd>shift</kbd>+clique soma/tira · <kbd>ctrl</kbd>+<kbd>A</kbd> todos<br>
-  cantinho ↘ → estica/encolhe livre · <kbd>shift</kbd> + cantinho → aumenta/diminui tudo junto, texto também<br>
+  cantinho ↘ → aumenta/diminui caixa e texto juntos · <kbd>shift</kbd> + cantinho → só a caixa<br>
+  borda direita → só largura · borda de baixo → só altura<br>
   <kbd>alt</kbd> + scroll em cima de um balão → aumenta/diminui só ele<br>
   <kbd>A</kbd> aparência · <kbd>Enter</kbd> edita o selecionado · <kbd>Del</kbd> apaga<br>
   duplo clique num post → edita · <kbd>Esc</kbd> ou <kbd>ctrl</kbd>+<kbd>Enter</kbd> termina<br>
@@ -571,7 +580,7 @@ function build(it){
     `<div class="foot"><button data-a="edit">editar</button><button data-a="cite">citar</button><button data-a="link">ligar</button>` +
     `<button data-a="szdown" title="balão menor">menor</button><button data-a="szup" title="balão maior">maior</button>` +
     `<button data-a="img">${it.image ? 'trocar imagem' : 'imagem'}</button>${it.image ? '<button data-a="noimg">tirar imagem</button>' : ''}` +
-    `<button data-a="del">apagar</button>${moved(it) ? '<button data-a="reset" title="volta posição, tamanho e fonte ao normal">↺ no lugar</button>' : ''}${n ? `<button class="bl" data-a="backs" title="quem cita ou liga nesse">↩ ${n}</button>` : ''}</div><div class="rz" title="arraste pra esticar/encolher · shift = aumenta tudo junto"></div>`;
+    `<button data-a="del">apagar</button>${moved(it) ? '<button data-a="reset" title="volta posição, tamanho e fonte ao normal">↺ no lugar</button>' : ''}${n ? `<button class="bl" data-a="backs" title="quem cita ou liga nesse">↩ ${n}</button>` : ''}</div><div class="rz" title="aumenta/diminui a caixa e o texto juntos · shift = só a caixa"></div><div class="rzr" title="largura"></div><div class="rzb" title="altura"></div>`;
   els.set(it.id, el);
   const lp = el.querySelector('.lp'); if (lp) fillPreview(lp);
   return el;
@@ -833,9 +842,11 @@ vp.addEventListener('pointerdown', e => {
   if (!isOwner){ startPan(e); return; } // visitante: arrastar só rola
   if (e.pointerType === 'touch'){ startPan(e); return; }
   const id = itemEl.dataset.id, it = byId(id);
-  if (e.target.closest('.rz')){ // cantinho: deformar
+  const handle = e.target.closest('.rz, .rzr, .rzb');
+  if (handle){ // alças: cantinho = caixa + texto juntos · lado = largura · baixo = altura
     e.preventDefault(); select(id);
-    drag = { type: 'size', id, sx: e.clientX, sy: e.clientY, ow: itemEl.offsetWidth, oh: itemEl.offsetHeight, oh0: it.h || 0, ok: it.k || defK(it), shift: e.shiftKey };
+    const mode = handle.classList.contains('rzr') ? 'w' : handle.classList.contains('rzb') ? 'h' : (e.shiftKey ? 'free' : 'scale');
+    drag = { type: 'size', mode, id, sx: e.clientX, sy: e.clientY, ow: itemEl.offsetWidth, oh: itemEl.offsetHeight, oh0: it.h || 0, ok: it.k || defK(it) };
     vp.classList.add('sizing');
     return;
   }
@@ -891,17 +902,17 @@ window.addEventListener('pointermove', e => {
   if (drag.type === 'box'){ boxSelect(e); return; }
   const it = byId(drag.id), el = els.get(drag.id);
   if (!it || !el) return;
-  if (drag.type === 'size'){ // deformar livre: largura e altura (shift = escala tudo, texto junto)
+  if (drag.type === 'size'){
     const dw = (e.clientX - drag.sx) / S.view.z, dh = (e.clientY - drag.sy) / S.view.z;
-    if (drag.shift || e.shiftKey){
-      const f = Math.max(0.15, (drag.ow + dw) / drag.ow);
-      it.w = Math.round(clamp(drag.ow * f, 40, 3000));
-      it.k = clamp(Math.round(drag.ok * f * 100) / 100, 0.25, 10);
+    if (drag.mode === 'scale'){ // caixa e texto crescem/encolhem juntos
+      const f = clamp(((drag.ow + dw) / drag.ow + (drag.oh + dh) / drag.oh) / 2, 0.12, 12);
+      it.w = Math.round(clamp(drag.ow * f, 40, 4000));
+      it.k = clamp(Math.round(drag.ok * f * 100) / 100, 0.2, 12);
       el.style.setProperty('--k', it.k);
       if (drag.oh0) it.h = Math.round(drag.oh0 * f);
     } else {
-      it.w = Math.round(clamp(drag.ow + dw, 40, 3000));
-      if (Math.abs(dh) > 3 || drag.oh0) it.h = Math.round(clamp(drag.oh + dh, 20, 5000));
+      if (drag.mode !== 'h') it.w = Math.round(clamp(drag.ow + dw, 40, 4000));
+      if (drag.mode === 'h' || (drag.mode === 'free' && (Math.abs(dh) > 3 || drag.oh0))) it.h = Math.round(clamp(drag.oh + dh, 20, 6000));
     }
     placeEl(el, it); drawLinksSoon();
     return;
