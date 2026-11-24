@@ -26,6 +26,8 @@ async function safeUrl(raw) {
   } catch { return null; }
   return u;
 }
+// print da página (serviço gratuito do WordPress; a primeira vez pode demorar uns segundos pra gerar)
+const shot = url => `https://s.wordpress.com/mshots/v1/${encodeURIComponent(url)}?w=1200&h=750`;
 function decode(s) {
   return String(s || '')
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
@@ -36,6 +38,16 @@ function decode(s) {
 function attr(tag, name) {
   const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
   return m ? (m[2] ?? m[3] ?? m[4]) : null;
+}
+function firstImg(html, base) { // primeira imagem "de verdade" do corpo da página
+  for (const tag of html.match(/<img\b[^>]*>/gi) || []) {
+    const src = attr(tag, 'src') || attr(tag, 'data-src');
+    if (!src || /^data:|\.svg(\?|$)|sprite|logo|icon|avatar|pixel|1x1/i.test(src)) continue;
+    const w = +(attr(tag, 'width') || 0), h = +(attr(tag, 'height') || 0);
+    if ((w && w < 200) || (h && h < 120)) continue;
+    try { return new URL(decode(src), base).href; } catch {}
+  }
+  return null;
 }
 function parse(html, base) {
   const meta = {};
@@ -55,7 +67,7 @@ function parse(html, base) {
     url: base,
     title: meta['og:title'] || meta['twitter:title'] || decode(titleTag) || null,
     description: meta['og:description'] || meta['twitter:description'] || meta['description'] || null,
-    image: abs(meta['og:image:secure_url'] || meta['og:image'] || meta['og:image:url'] || meta['twitter:image'] || meta['twitter:image:src']),
+    image: abs(meta['og:image:secure_url'] || meta['og:image'] || meta['og:image:url'] || meta['twitter:image'] || meta['twitter:image:src']) || firstImg(html, base),
     site: meta['og:site_name'] || new URL(base).hostname.replace(/^www\./, ''),
     favicon: abs(icon) || new URL('/favicon.ico', base).href,
   };
@@ -95,11 +107,16 @@ module.exports = async (req, res) => {
       const { done, value } = await reader.read();
       if (done) break;
       bytes += value.length; html += dec.decode(value, { stream: true });
-      if (/<\/head>/i.test(html)) break;
+      if (/<\/head>/i.test(html) && /og:image|twitter:image/i.test(html)) break;
+      if (bytes > 250 * 1024) break;
     }
     try { reader.cancel(); } catch {}
+    const out = parse(html, u.href);
+    if (!out.image){ // sem imagem de capa: usa um print da própria página
+      out.image = shot(u.href); out.shot = true;
+    }
     res.setHeader('Cache-Control', 's-maxage=86400, stale-while-revalidate=604800');
-    res.end(JSON.stringify(parse(html, u.href)));
+    res.end(JSON.stringify(out));
   } catch (e) {
     res.statusCode = 502;
     res.setHeader('Cache-Control', 's-maxage=600');

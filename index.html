@@ -179,6 +179,7 @@ textarea.ed::placeholder{color:var(--muted)}
 /* ---------- prévia de links ---------- */
 .lp{display:block;margin-top:10px;border:var(--bw) solid var(--border);border-radius:calc(var(--radius) * .6);overflow:hidden;text-decoration:none;color:inherit;background:rgba(127,127,127,.06);font-size:.86em;line-height:1.35}
 .lp:hover{border-color:var(--accent)}
+.lp .lp-img.shot{object-position:top}
 .lp .lp-img{display:block;width:100%;max-height:260px;object-fit:cover;background:rgba(127,127,127,.12);pointer-events:none;-webkit-user-drag:none}
 .sz-pp .lp .lp-img{max-height:110px}
 .sz-p .lp .lp-img{max-height:170px}
@@ -309,7 +310,7 @@ body.party .note{animation:hue 2.5s linear infinite}
   arrastar um balão → move ele pra onde quiser<br>
   <kbd>alt</kbd> + arrastar um post → duplica · link no texto → vira prévia da página<br>
   arrastar no fundo → seleciona vários · <kbd>shift</kbd>+clique soma/tira · <kbd>ctrl</kbd>+<kbd>A</kbd> todos<br>
-  cantinho ↘ → arraste pra aumentar/diminuir (pequenos dividem a linha)<br>
+  cantinho ↘ → estica/encolhe livre · <kbd>shift</kbd> + cantinho → aumenta/diminui tudo junto, texto também<br>
   <kbd>alt</kbd> + scroll em cima de um balão → aumenta/diminui só ele<br>
   <kbd>A</kbd> aparência · <kbd>Enter</kbd> edita o selecionado · <kbd>Del</kbd> apaga<br>
   duplo clique num post → edita · <kbd>Esc</kbd> ou <kbd>ctrl</kbd>+<kbd>Enter</kbd> termina<br>
@@ -388,14 +389,14 @@ function snapshot(){ return { title: S.title, bio: S.bio, theme: S.theme, fs: S.
 function toRow(it){
   return { id: it.id, type: it.type || 'note', body: it.text || '', image_path: it.image_path || null, quote: it.quote || null,
     sz: it.sz || 'm', k: it.k ?? null, dx: Math.round(it.dx || 0), dy: Math.round(it.dy || 0),
-    w: it.w ? Math.round(it.w) : null, rot: it.rot || 0, created: it.created, style: it.style || {} };
+    w: it.w ? Math.round(it.w) : null, h: it.h ? Math.round(it.h) : null, rot: it.rot || 0, created: it.created, style: it.style || {} };
 }
 function fromRow(r){
   const it = { id: r.id, type: r.type, text: r.body || '', sz: r.sz || 'm', created: +r.created };
   if (r.k != null) it.k = r.k;
   if (r.image_path) it.image_path = r.image_path;
   if (r.quote) it.quote = r.quote;
-  if (r.dx) it.dx = r.dx; if (r.dy) it.dy = r.dy; if (r.w) it.w = r.w; if (r.rot) it.rot = r.rot;
+  if (r.dx) it.dx = r.dx; if (r.dy) it.dy = r.dy; if (r.w) it.w = r.w; if (r.h) it.h = r.h; if (r.rot) it.rot = r.rot;
   if (r.style && Object.keys(r.style).length) it.style = r.style;
   return it;
 }
@@ -570,7 +571,7 @@ function build(it){
     `<div class="foot"><button data-a="edit">editar</button><button data-a="cite">citar</button><button data-a="link">ligar</button>` +
     `<button data-a="szdown" title="balão menor">menor</button><button data-a="szup" title="balão maior">maior</button>` +
     `<button data-a="img">${it.image ? 'trocar imagem' : 'imagem'}</button>${it.image ? '<button data-a="noimg">tirar imagem</button>' : ''}` +
-    `<button data-a="del">apagar</button>${moved(it) ? '<button data-a="reset" title="volta posição, tamanho e fonte ao normal">↺ no lugar</button>' : ''}${n ? `<button class="bl" data-a="backs" title="quem cita ou liga nesse">↩ ${n}</button>` : ''}</div><div class="rz" title="arraste pra aumentar ou diminuir"></div>`;
+    `<button data-a="del">apagar</button>${moved(it) ? '<button data-a="reset" title="volta posição, tamanho e fonte ao normal">↺ no lugar</button>' : ''}${n ? `<button class="bl" data-a="backs" title="quem cita ou liga nesse">↩ ${n}</button>` : ''}</div><div class="rz" title="arraste pra esticar/encolher · shift = aumenta tudo junto"></div>`;
   els.set(it.id, el);
   const lp = el.querySelector('.lp'); if (lp) fillPreview(lp);
   return el;
@@ -583,10 +584,11 @@ const SZV = { pp: 0.33, p: 0.5, m: 1, g: 1.3, gg: 1.65 };
 function sizeFor(f){ return f < 0.42 ? 'pp' : f < 0.75 ? 'p' : f < 1.15 ? 'm' : f < 1.48 ? 'g' : 'gg'; }
 function defK(it){ return Math.round((it.type === 'text' ? 1.4 : 1) * SZK[it.sz || 'm'] * 100) / 100; }
 function isLoose(it){ return !!it.image && !(it.text || '').trim() && !it.quote; }
-function moved(it){ return !!(it.dx || it.dy || it.w || (it.k && it.k !== defK(it)) || (it.sz && it.sz !== 'm')); }
+function moved(it){ return !!(it.dx || it.dy || it.w || it.h || (it.k && it.k !== defK(it)) || (it.sz && it.sz !== 'm')); }
 function placeEl(el, it){
   el.style.transform = (it.dx || it.dy) ? `translate(${it.dx || 0}px,${it.dy || 0}px)` : '';
   el.style.width = it.w ? it.w + 'px' : '';
+  el.style.minHeight = it.h ? it.h + 'px' : '';
   el.classList.toggle('sized', !!it.w);
 }
 /* prévia de links: pergunta pra /api/preview (função na Vercel) e guarda por 7 dias */
@@ -597,7 +599,7 @@ function previewSlot(url){
 }
 function getPreview(url){
   if (LP.has(url)) return LP.get(url);
-  const k = 'lp:' + url, c = readJSON(k);
+  const k = 'lp2:' + url, c = readJSON(k);
   if (c.t && Date.now() - c.t < LP_DAYS * 864e5) { const p = Promise.resolve(c.d); LP.set(url, p); return p; }
   const p = fetch('/api/preview?url=' + encodeURIComponent(url))
     .then(r => r.ok ? r.json() : null).catch(() => null)
@@ -611,7 +613,7 @@ function fillPreview(a){
     const host = a.querySelector('small') ? a.querySelector('small').textContent : '';
     if (!d || (!d.title && !d.image)){ a.innerHTML = `<div class="lp-t"><small>🔗 ${esc(host)}</small></div>`; drawLinksSoon(); return; }
     a.innerHTML =
-      (d.image ? `<img class="lp-img" src="${esc(d.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '') +
+      (d.image ? `<img class="lp-img${d.shot ? ' shot' : ''}" src="${esc(d.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '') +
       `<div class="lp-t">${d.title ? `<b>${esc(d.title)}</b>` : ''}${d.description ? `<span>${esc(d.description)}</span>` : ''}` +
       `<small>${d.favicon ? `<img src="${esc(d.favicon)}" alt="" referrerpolicy="no-referrer">` : ''}${esc(d.site || host)}</small></div>`;
     a.querySelectorAll('img').forEach(im => im.addEventListener('error', () => im.remove()));
@@ -831,6 +833,12 @@ vp.addEventListener('pointerdown', e => {
   if (!isOwner){ startPan(e); return; } // visitante: arrastar só rola
   if (e.pointerType === 'touch'){ startPan(e); return; }
   const id = itemEl.dataset.id, it = byId(id);
+  if (e.target.closest('.rz')){ // cantinho: deformar
+    e.preventDefault(); select(id);
+    drag = { type: 'size', id, sx: e.clientX, sy: e.clientY, ow: itemEl.offsetWidth, oh: itemEl.offsetHeight, oh0: it.h || 0, ok: it.k || defK(it), shift: e.shiftKey };
+    vp.classList.add('sizing');
+    return;
+  }
   if (e.shiftKey || e.ctrlKey || e.metaKey){ e.preventDefault(); toggleSel(id); return; }
   if (!selSet.has(id)) select(id);
   if (e.altKey && !e.target.closest('.rz')){ // alt + arrastar = duplica e arrasta a cópia
@@ -840,12 +848,6 @@ vp.addEventListener('pointerdown', e => {
     drag = { type: 'move', id: S.sel, ids: made, dup: true, orig: new Map(made.map(g => { const x = byId(g); return [g, { dx: x.dx || 0, dy: x.dy || 0 }]; })), sx: e.clientX, sy: e.clientY, oview: S.view.y, moved: false };
     made.forEach(g => { const x = els.get(g); if (x) x.classList.add('dragging'); });
     vp.classList.add('moving');
-    return;
-  }
-  if (e.target.closest('.rz')){
-    e.preventDefault();
-    drag = { type: 'size', id, sx: e.clientX, sy: e.clientY, ov: SZV[it.sz || 'm'], col: world.clientWidth };
-    vp.classList.add('sizing');
     return;
   }
   const group = selSet.size > 1 ? selected() : [id]; // arrasta todos os selecionados juntos
@@ -889,13 +891,19 @@ window.addEventListener('pointermove', e => {
   if (drag.type === 'box'){ boxSelect(e); return; }
   const it = byId(drag.id), el = els.get(drag.id);
   if (!it || !el) return;
-  if (drag.type === 'size'){
-    const d = ((e.clientX - drag.sx) + (e.clientY - drag.sy) * 0.6) / S.view.z;
-    const sz = sizeFor(drag.ov + d / drag.col);
-    if (sz !== (it.sz || 'm') || it.w){
-      it.sz = sz; delete it.w; it.k = defK(it);
-      const nu = build(it); nu.classList.add('dragging'); el.replaceWith(nu); drawLinksSoon();
+  if (drag.type === 'size'){ // deformar livre: largura e altura (shift = escala tudo, texto junto)
+    const dw = (e.clientX - drag.sx) / S.view.z, dh = (e.clientY - drag.sy) / S.view.z;
+    if (drag.shift || e.shiftKey){
+      const f = Math.max(0.15, (drag.ow + dw) / drag.ow);
+      it.w = Math.round(clamp(drag.ow * f, 40, 3000));
+      it.k = clamp(Math.round(drag.ok * f * 100) / 100, 0.25, 10);
+      el.style.setProperty('--k', it.k);
+      if (drag.oh0) it.h = Math.round(drag.oh0 * f);
+    } else {
+      it.w = Math.round(clamp(drag.ow + dw, 40, 3000));
+      if (Math.abs(dh) > 3 || drag.oh0) it.h = Math.round(clamp(drag.oh + dh, 20, 5000));
     }
+    placeEl(el, it); drawLinksSoon();
     return;
   }
   if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
@@ -1040,7 +1048,7 @@ function bulk(action, value){
     const it = byId(id);
     if (action === 'smaller' || action === 'bigger'){
       const i = clamp(SIZES.indexOf(it.sz || 'm') + (action === 'bigger' ? 1 : -1), 0, SIZES.length - 1);
-      it.sz = SIZES[i]; delete it.w; it.k = defK(it);
+      it.sz = SIZES[i]; delete it.w; delete it.h; it.k = defK(it);
     } else if (action === 'fup' || action === 'fdown'){
       it.k = clamp(Math.round((it.k || defK(it)) * (action === 'fup' ? 1.1 : 1 / 1.1) * 100) / 100, 0.4, 5);
     } else if (action === 'font'){
@@ -1049,7 +1057,7 @@ function bulk(action, value){
     } else if (action === 'color'){
       it.style = { ...(it.style || {}), color: value };
     } else if (action === 'reset'){
-      delete it.dx; delete it.dy; delete it.w; it.k = defK(it);
+      delete it.dx; delete it.dy; delete it.w; delete it.h; it.k = defK(it);
     }
     rebuild(id);
   }
@@ -1230,10 +1238,10 @@ document.addEventListener('click', e => {
       case 'link': startLink(id); break;
       case 'szdown': case 'szup': {
         const i = clamp(SIZES.indexOf(it.sz || 'm') + (a.dataset.a === 'szup' ? 1 : -1), 0, SIZES.length - 1);
-        it.sz = SIZES[i]; delete it.w; it.k = defK(it);
+        it.sz = SIZES[i]; delete it.w; delete it.h; it.k = defK(it);
         rebuild(id); drawLinksSoon(); save(); break;
       }
-      case 'reset': delete it.dx; delete it.dy; delete it.w; it.sz = 'm'; it.k = defK(it); rebuild(id); drawLinksSoon(); save(); break;
+      case 'reset': delete it.dx; delete it.dy; delete it.w; delete it.h; it.sz = 'm'; it.k = defK(it); rebuild(id); drawLinksSoon(); save(); break;
       case 'img': imgTarget = id; $('#file').click(); break;
       case 'noimg': delete it.image; rebuild(id); drawLinksSoon(); save(); break;
       case 'del': removeItem(id); break;
