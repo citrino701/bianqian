@@ -200,6 +200,22 @@ textarea.ed::placeholder{color:var(--muted)}
 @keyframes pulse{50%{opacity:.4}}
 .sz-pp .lp-t span{display:none}
 
+/* ---------- eixo do feed (aparece quando você anda pros lados) ---------- */
+#axis{position:absolute;top:0;bottom:0;left:0;width:100%;pointer-events:none;z-index:0;opacity:0;transition:opacity .25s;
+  border-left:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);border-right:1px dashed color-mix(in srgb,var(--accent) 45%,transparent)}
+#axis::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:linear-gradient(to bottom,color-mix(in srgb,var(--accent) 50%,transparent),color-mix(in srgb,var(--accent) 10%,transparent))}
+#axis::after{content:"↓";position:absolute;left:50%;bottom:120px;transform:translateX(-50%);color:var(--accent);opacity:.6;font-size:18px}
+body.offc #axis{opacity:.55}
+#hbar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;z-index:25;opacity:0;pointer-events:none;transition:opacity .2s}
+#hbar.show{opacity:1;pointer-events:auto}
+#hbar .tr{position:relative;width:180px;height:6px;border-radius:99px;background:color-mix(in srgb,var(--border) 80%,transparent);cursor:pointer}
+#hbar .th{position:absolute;top:0;bottom:0;border-radius:99px;background:var(--muted);opacity:.8}
+#hbar .ax{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--accent);border-radius:2px;z-index:1}
+#hcenter{display:none;font:12px ui-sans-serif,system-ui,sans-serif;padding:5px 10px;border-radius:99px;background:var(--bar);border:var(--bw) solid var(--border);color:var(--text);box-shadow:0 6px 18px rgba(0,0,0,.3)}
+body.offc #hcenter{display:block}
+#hcenter:hover{border-color:var(--accent)}
+body.multi #hbar{bottom:70px}
+
 /* ---------- formas e menu do botão direito ---------- */
 #shapes{position:absolute;left:0;top:0;width:0;height:0;z-index:5;pointer-events:none}
 .shape{position:absolute;pointer-events:none}
@@ -294,6 +310,7 @@ body.party .note{animation:hue 2.5s linear infinite}
 
 <main id="vp">
   <div id="world">
+    <div id="axis"></div>
     <svg id="links"></svg>
     <section id="prof">
       <h1 id="pTitle" contenteditable="true" spellcheck="false">meu canto</h1>
@@ -328,6 +345,7 @@ body.party .note{animation:hue 2.5s linear infinite}
   <div class="arow"><button type="button" class="btn" id="authCancel">cancelar</button><span class="sp"></span><button type="submit" class="post" id="authGo">entrar</button></div>
   <p class="sub" id="authMsg"></p>
 </form></div>
+<div id="hbar"><div class="tr"><i class="ax" title="eixo do feed"></i><i class="th"></i></div><button id="hcenter" title="voltar o feed pro centro (C)">⊙ centralizar</button></div>
 <div id="bulk"></div>
 <div id="ctx"></div>
 <div id="pfoot"></div>
@@ -335,7 +353,8 @@ body.party .note{animation:hue 2.5s linear infinite}
 <div id="help"><div class="box">
   <b>atalhos</b><br>
   <kbd>N</kbd> escrever post · <kbd>T</kbd> texto solto (sem caixinha)<br>
-  scroll, <kbd>espaço</kbd> + arrastar ou botão do meio → sobe e desce<br>
+  scroll, <kbd>espaço</kbd> + arrastar ou botão do meio → anda pra cima, baixo e lados<br>
+  <kbd>shift</kbd> + scroll ou <kbd>←</kbd> <kbd>→</kbd> → pros lados · <kbd>C</kbd> centraliza<br>
   <kbd>ctrl</kbd> + scroll → zoom · <kbd>ctrl</kbd> <kbd>+</kbd>/<kbd>−</kbd>/<kbd>0</kbd> também<br>
   <kbd>J</kbd>/<kbd>K</kbd> próximo/anterior · <kbd>Home</kbd> topo · <kbd>End</kbd> fim<br>
   imagem sem texto vira foto jogada · com texto fica na caixinha<br>
@@ -788,11 +807,53 @@ function clampY(){
   const maxY = 40, minY = Math.min(maxY, vh - h - 20);
   S.view.y = clamp(S.view.y, minY, maxY);
 }
+/* horizontal: o feed fica centralizado, mas dá pra andar pros lados.
+   S.view.x = quanto a coluna está deslocada do centro (0 = centralizada) */
+function baseX(z){ const left = sideOffset(), W = vp.clientWidth - left; return left + (W - world.offsetWidth * z) / 2; }
+function contentX(){ // de onde até onde vai o conteúdo (posts arrastados e formas incluídos)
+  let a = 0, b = world.offsetWidth;
+  els.forEach((el, id) => { const it = byId(id) || {}; const l = el.offsetLeft + (it.dx || 0); a = Math.min(a, l); b = Math.max(b, l + el.offsetWidth); });
+  S.items.forEach(it => { if (it.type !== 'shape') return; const l = Math.min(it.dx || 0, (it.dx || 0) + (it.w || 0)); a = Math.min(a, l - 10); b = Math.max(b, Math.max(it.dx || 0, (it.dx || 0) + (it.w || 0)) + 10); });
+  return { a, b };
+}
+function clampX(){
+  const z = S.view.z, { a, b } = contentX(), left = sideOffset(), W = vp.clientWidth - left;
+  const base = baseX(z);
+  if ((b - a) * z <= W - 60){ // cabe tudo na tela: só deixa andar até a borda do conteúdo
+    const lo = left + 30 - base - a * z, hi = left + W - 30 - base - b * z;
+    S.view.x = clamp(S.view.x || 0, Math.min(lo, hi, 0), Math.max(lo, hi, 0));
+    return;
+  }
+  const mid = left + W / 2; // dá pra levar qualquer pedaço até o meio da tela
+  S.view.x = clamp(S.view.x || 0, mid - base - b * z, mid - base - a * z);
+}
+function updateAxis(){
+  const off = Math.abs(S.view.x || 0) > 4;
+  document.body.classList.toggle('offc', off);
+  const z = S.view.z, { a, b } = contentX(), left = sideOffset(), W = vp.clientWidth - left;
+  const total = (b - a) * z, bar = $('#hbar');
+  const show = off || total > W + 4;
+  bar.classList.toggle('show', show);
+  if (!show) return;
+  const x = baseX(z) + (S.view.x || 0);
+  const start = (left - (x + a * z)) / total, size = W / total;
+  const th = bar.querySelector('.th'), ax = bar.querySelector('.ax');
+  th.style.left = clamp(start, 0, 1) * 100 + '%';
+  th.style.width = clamp(size, 0.04, 1 - clamp(start, 0, 1)) * 100 + '%';
+  ax.style.left = clamp((world.offsetWidth / 2 - a) * z / total, 0, 1) * 100 + '%';
+}
+function recenter(){ S.view.x = 0; applyView(true); save(); }
+$('#hcenter').onclick = recenter;
+$('#hbar .tr').addEventListener('pointerdown', e => { // clicar na barrinha leva pra aquele ponto
+  const r = e.currentTarget.getBoundingClientRect(), f = (e.clientX - r.left) / r.width;
+  const z = S.view.z, { a, b } = contentX(), left = sideOffset(), W = vp.clientWidth - left;
+  S.view.x = (left + W / 2) - (a + (b - a) * f) * z - baseX(z);
+  applyView(true); save();
+});
 function applyView(anim){
-  clampY();
+  clampY(); clampX();
   const { y, z } = S.view;
-  const left = sideOffset(), W = vp.clientWidth - left;
-  const x = left + (W - world.offsetWidth * z) / 2;
+  const x = baseX(z) + (S.view.x || 0);
   if (anim){
     world.classList.add('anim'); vp.classList.add('anim');
     clearTimeout(animT); animT = setTimeout(() => { world.classList.remove('anim'); vp.classList.remove('anim'); }, 470);
@@ -802,16 +863,22 @@ function applyView(anim){
   vp.style.backgroundSize = `${g}px ${g}px`;
   vp.style.backgroundPosition = `${x}px ${y}px`;
   $('#zoomLbl').textContent = Math.round(z * 100) + '%';
+  updateAxis();
 }
-function zoomAt(cy, nz, anim){
+function zoomAt(cy, nz, anim, cx){
   const r = vp.getBoundingClientRect(), my = cy - r.top, z = S.view.z;
   nz = clamp(nz, 0.25, 4);
   S.view.y = my - (my - S.view.y) * nz / z;
+  if (cx != null){ // mantém embaixo do mouse o mesmo ponto, também na horizontal
+    const mx = cx - r.left, xs = baseX(z) + (S.view.x || 0);
+    S.view.x = (mx - (mx - xs) * nz / z) - baseX(nz);
+  } else S.view.x = (S.view.x || 0) * nz / z;
   S.view.z = nz;
   applyView(anim); save();
 }
-function zoomCenter(f){ const r = vp.getBoundingClientRect(); zoomAt(r.top + r.height / 2, S.view.z * f, true); }
+function zoomCenter(f){ const r = vp.getBoundingClientRect(); zoomAt(r.top + r.height / 2, S.view.z * f, true, r.left + r.width / 2); }
 function setZoom(z){ const r = vp.getBoundingClientRect(); zoomAt(r.top + r.height / 2, z, true); }
+function scrollX(dx){ S.view.x = (S.view.x || 0) - dx; applyView(); save(); }
 function scrollBy(dy, anim){ S.view.y -= dy; applyView(anim); save(); }
 function toTop(){ S.view.y = 40; applyView(true); save(); }
 function toEnd(){ S.view.y = -1e9; applyView(true); save(); }
@@ -819,8 +886,10 @@ function flyTo(id){
   let el = els.get(id);
   if (!el && S.filter && byId(id)){ setFilter(S.filter); el = els.get(id); }
   if (!el){ toast(`#${id} não existe`); return; }
-  const vh = vp.clientHeight, z = S.view.z;
-  S.view.y = vh / 2 - (el.offsetTop + Math.min(el.offsetHeight / 2, vh / (3 * z))) * z;
+  const vh = vp.clientHeight, z = S.view.z, it = byId(id) || {};
+  S.view.y = vh / 2 - (el.offsetTop + (it.dy || 0) + Math.min(el.offsetHeight / 2, vh / (3 * z))) * z;
+  const left = sideOffset(), W = vp.clientWidth - left; // e traz pro meio na horizontal também
+  S.view.x = (left + W / 2) - (el.offsetLeft + (it.dx || 0) + el.offsetWidth / 2) * z - baseX(z);
   applyView(true); save(); select(id);
   el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
 }
@@ -839,14 +908,15 @@ vp.addEventListener('wheel', e => {
     ids.forEach(g => { const it = byId(g); it.k = clamp(Math.round((it.k || 1) * f * 100) / 100, 0.4, 5); const el = els.get(g); if (el) el.style.setProperty('--k', it.k); });
     drawLinksSoon(); save(); return;
   }
-  if (e.ctrlKey || e.metaKey) zoomAt(e.clientY, S.view.z * Math.exp(-e.deltaY * m * 0.0018));
-  else scrollBy(e.deltaY * m + (e.shiftKey ? 0 : 0));
+  if (e.ctrlKey || e.metaKey) zoomAt(e.clientY, S.view.z * Math.exp(-e.deltaY * m * 0.0018), false, e.clientX);
+  else if (e.shiftKey) scrollX(e.deltaY * m || e.deltaX * m); // shift + scroll = pros lados
+  else { S.view.x = (S.view.x || 0) - e.deltaX * m; scrollBy(e.deltaY * m); }
 }, { passive: false });
 window.addEventListener('wheel', e => { if ((e.ctrlKey || e.metaKey) && !e.defaultPrevented) e.preventDefault(); }, { passive: false });
 
 /* arrastar pra subir/descer: espaço, botão do meio, fundo vazio, ou dedo */
 let drag = null;
-function startPan(e){ drag = { type: 'pan', sy: e.clientY, oy: S.view.y }; vp.classList.add('panning'); }
+function startPan(e){ drag = { type: 'pan', sx: e.clientX, sy: e.clientY, ox: S.view.x || 0, oy: S.view.y }; vp.classList.add('panning'); }
 vp.addEventListener('pointerdown', e => {
   if (spaceDown || e.button === 1){ e.preventDefault(); e.stopPropagation(); startPan(e); }
 }, true);
@@ -940,7 +1010,7 @@ function boxSelect(e){
 }
 window.addEventListener('pointermove', e => {
   if (!drag) return;
-  if (drag.type === 'pan'){ S.view.y = drag.oy + (e.clientY - drag.sy); applyView(); return; }
+  if (drag.type === 'pan'){ S.view.y = drag.oy + (e.clientY - drag.sy); S.view.x = drag.ox + (e.clientX - drag.sx); applyView(); return; }
   if (drag.type === 'box'){ boxSelect(e); return; }
   if (drag.type === 'shape'){
     const it = byId(drag.sid), el = shapeEls.get(drag.sid); if (!it || !el) return;
@@ -1709,6 +1779,9 @@ window.addEventListener('keydown', e => {
     case 'j': step(1); break;
     case 'k': step(-1); break;
     case 'arrowdown': e.preventDefault(); scrollBy(80); break;
+    case 'arrowleft': e.preventDefault(); scrollX(-80); break;
+    case 'arrowright': e.preventDefault(); scrollX(80); break;
+    case 'c': recenter(); break;
     case 'arrowup': e.preventDefault(); scrollBy(-80); break;
     case 'pagedown': e.preventDefault(); scrollBy(vp.clientHeight * 0.85, true); break;
     case 'pageup': e.preventDefault(); scrollBy(-vp.clientHeight * 0.85, true); break;
